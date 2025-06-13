@@ -151,6 +151,7 @@ class JSONschema(dict, metaclass=UninhabitedMeta):
                 return s1.enum + s2.enum
 
     def isSubtype(self, s):
+
         #
         # if self == s or is_bot(self) or is_top(s):
         if is_bot(self) or is_top(s):

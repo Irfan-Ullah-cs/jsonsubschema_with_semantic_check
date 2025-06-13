@@ -27,12 +27,14 @@ JtypesRestrictionKeywords = reduce(operator.add, JtypesToKeywords.values())
 
 Jconnectors = set(["anyOf", "allOf", "oneOf", "not"])
 
+JsemanticKeywords = set(["stype"])
+
 Jcommonkw = Jconnectors.union(["enum", "type", "const"])
 
-JNonValidation = set(["$schema", "$id", "definitions", "title", "description", "format"])
+JNonValidation = set(["$schema", "$id", "definitions", "title", "description", "format"]).union(JsemanticKeywords)
 
 # Jkeywords = Jcommonkw.union(Jtypes, reduce(operator.add, JtypesToKeywords.values())).union(["$ref"])
-Jkeywords = Jcommonkw.union(Jtypes, JtypesRestrictionKeywords, ["$ref"])
+Jkeywords = Jcommonkw.union(Jtypes, JtypesRestrictionKeywords, ["$ref"]).union(JsemanticKeywords)
                             # .union(JNonValidation) # conflicts with canonicalize_connectors
 
 JtypesToPyTypes = {"integer": int, "number": float, "string": str,
