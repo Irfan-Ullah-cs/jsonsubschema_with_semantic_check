@@ -143,17 +143,6 @@ is_compatible = isSubschema(sensor_schema, environmental_schema)
 
 ### CLI Interface
 
-#### Basic Usage
-```bash
-# Create example schemas
-echo '{"type": ["null", "string"]}' > s1.json
-echo '{"type": ["string", "null"], "not": {"enum": [""]}}' > s2.json
-
-# Check subschema relationship
-python -m jsonsubschema.cli s2.json s1.json
-```
-
-#### Semantic Validation
 ```bash
 # Create semantic schemas
 echo '{"type": "number", "stype": "quantitykind:Temperature"}' > temp.json
