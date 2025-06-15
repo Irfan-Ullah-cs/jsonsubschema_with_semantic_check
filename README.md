@@ -133,7 +133,8 @@ environmental_schema = {
             "type": "number",
             "stype": "quantitykind:ThermodynamicTemperature"
         }
-    }
+    },
+    "required": ["temperature"]
 }
 
 # Deep semantic validation
