@@ -14,21 +14,55 @@ class SemanticTypeResolver:
     
     _instance = None  # Singleton instance
     
-    @classmethod
-    def get_instance(cls):
-        """Get or create the singleton instance of the resolver"""
+    @classmethod    
+    def get_instance(cls, graph=None, lazy_load=False):
+        """
+        Get or create the singleton instance of the resolver
+        
+        Args:
+            graph: Pre-initialized rdflib.Graph with user's definitions
+            lazy_load: If True, fetch unknown semantic types on-demand
+        """
+        # If no instance exists, create one
         if cls._instance is None:
-            cls._instance = SemanticTypeResolver()
+            cls._instance = SemanticTypeResolver(graph=graph, lazy_load=lazy_load)
+            return cls._instance
+        
+        # If instance exists but parameters differ significantly, reset and recreate
+        current_graph_id = id(cls._instance.graph) if hasattr(cls._instance, 'graph') else None
+        new_graph_id = id(graph) if graph is not None else None
+        current_lazy_load = getattr(cls._instance, 'lazy_load', False)
+        
+        # Reset if different graph provided or lazy_load setting changed
+        if (graph is not None and current_graph_id != new_graph_id) or current_lazy_load != lazy_load:
+            cls._instance = SemanticTypeResolver(graph=graph, lazy_load=lazy_load)
+        
         return cls._instance
-    
+        
     @classmethod
     def reset_instance(cls):
         """Reset the singleton instance (useful for testing)"""
         cls._instance = None
     
-    def __init__(self, graph_urls=None):
-        """Initialize the resolver with optional graph URLs"""
-        self.graph = rdflib.Graph()
+    def __init__(self, graph=None, lazy_load=False):
+        """
+        Initialize the resolver with optional graph and lazy loading.
+
+        Args:
+            graph: Pre-initialized rdflib.Graph with user's definitions
+            lazy_load: If True, fetch unknown semantic types on-demand
+        """
+        self.lazy_load = lazy_load
+
+        # Initialize graph
+        if graph is not None:
+            self.graph = graph
+        else:
+            self.graph = rdflib.Graph()
+       
+       
+
+
         # Bind common prefixes
         self.graph.bind('quantitykind', rdflib.Namespace('http://qudt.org/vocab/quantitykind/'))
         self.graph.bind('qudt', rdflib.Namespace('http://qudt.org/schema/qudt/'))
@@ -38,33 +72,52 @@ class SemanticTypeResolver:
         self.relation_cache = {}  # Cache for subtype relation checks
         self.supports_transitive_queries = None  # Will be tested on first use
         
-        # Only load graphs if semantic reasoning is enabled
-        if config.SEMANTIC_REASONING_ENABLED:
-            self._load_default_graphs()
-            self._load_additional_graphs(graph_urls)
+        self.fetched_namespaces = set()  # Track what namespaces we've already fetched
+
+        print(f"SemanticTypeResolver initialized with {len(self.graph)} triples, lazy_load={lazy_load}")
     
-    def _load_default_graphs(self):
-        """Load default semantic graphs"""
-        print("Loading default QUDT quantity kinds graph (this may take a moment)...")
-        try:
-            self.graph.parse("https://qudt.org/vocab/quantitykind/")
-            print(f"Loaded {len(self.graph)} triples from QUDT quantity kinds")
-        except Exception as e:
-            print(f"Warning: Error loading QUDT graph: {e}")
-            print("Continuing without QUDT quantity kinds")
-    
-    def _load_additional_graphs(self, graph_urls):
-        """Load additional graphs from URLs or cache"""
-        if not graph_urls:
-            graph_urls = config.SEMANTIC_GRAPH_URLS
+
+
+    def _extract_namespace(self, iri):
+        """Extract namespace URL from IRI for lazy loading."""
+        if '#' in iri:
+            return iri.split('#')[0] + '#'
+        else:
+            parts = iri.rstrip('/').split('/')
+            return '/'.join(parts[:-1]) + '/'
+
+    def _type_exists_in_graph(self, uri_ref):
+        """Check if a semantic type exists in the graph."""
+        return (uri_ref, None, None) in self.graph or (None, None, uri_ref) in self.graph
+
+    def _lazy_load_semantic_type(self, stype_iri):
+        """Attempt to fetch and load RDF graph for unknown semantic type."""
+        if not self.lazy_load:
+            return False
             
-        for url in graph_urls:
-            try:
-                print(f"Loading graph from {url}")
-                self.graph.parse(url)
-                print(f"Successfully loaded graph from {url}")
-            except Exception as e:
-                print(f"Warning: Error loading graph from {url}: {e}")
+        namespace = self._extract_namespace(stype_iri)
+        
+        if namespace in self.fetched_namespaces:
+            return False
+            
+        try:
+            print(f"Lazy loading namespace: {namespace}")
+            initial_count = len(self.graph)
+            self.graph.parse(namespace)
+            final_count = len(self.graph)
+            
+            print(f"Loaded {final_count - initial_count} triples from {namespace}")
+            self.fetched_namespaces.add(namespace)
+            self.relation_cache.clear()
+            self.supports_transitive_queries = None
+            return True
+            
+        except Exception as e:
+            print(f"Failed to lazy load {namespace}: {e}")
+            self.fetched_namespaces.add(namespace)
+            return False
+    
+
     
     def _test_transitive_support(self):
         """Test if the RDF store supports transitive property path queries"""
@@ -103,18 +156,35 @@ class SemanticTypeResolver:
         narrower_iri = normalize_iri(narrower_iri)
         broader_iri = normalize_iri(broader_iri)
         
-        print(f"Checking if {narrower_iri} is a subtype of {broader_iri}")
         
-        # Check cache first
-        cache_key = (narrower_iri, broader_iri)
-        if cache_key in self.relation_cache:
-            return self.relation_cache[cache_key]
+        cache_key = (narrower_iri, broader_iri)       
+
         
         # If they're the same IRI, return True
         if narrower_iri == broader_iri:
             self.relation_cache[cache_key] = True
             return True
         
+         # Check cache first
+
+        if cache_key in self.relation_cache:
+            return self.relation_cache[cache_key]
+        
+
+        print(f"Checking if {narrower_iri} is a subtype of {broader_iri}")
+
+        # Check if types exist in graph, lazy load if needed
+        narrower_ref = rdflib.URIRef(narrower_iri)
+        broader_ref = rdflib.URIRef(broader_iri)
+
+        if self.lazy_load:
+            if not self._type_exists_in_graph(narrower_ref):
+                self._lazy_load_semantic_type(narrower_iri)
+            if not self._type_exists_in_graph(broader_ref):
+                self._lazy_load_semantic_type(broader_iri)
+
+
+
         # Try the appropriate method based on RDF store capabilities
         if self._test_transitive_support():
             result = self._check_with_transitive_query(narrower_iri, broader_iri)
@@ -124,15 +194,18 @@ class SemanticTypeResolver:
         # Cache and return result
         self.relation_cache[cache_key] = result
         return result
-    
+        
     def _check_with_transitive_query(self, narrower_iri, broader_iri):
         """Use SPARQL transitive query with property paths"""
         try:
-            # Use transitive query with Kleene star to check direct OR transitive relationship
+            # Updated query to check both skos:broader and rdfs:subClassOf relationships
             transitive_query = f"""
             PREFIX skos: <http://www.w3.org/2004/02/skos/core#>
+            PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
             ASK {{ 
-                <{narrower_iri}> skos:broader* <{broader_iri}> .
+                {{ <{narrower_iri}> skos:broader* <{broader_iri}> . }}
+                UNION
+                {{ <{narrower_iri}> rdfs:subClassOf* <{broader_iri}> . }}
             }}
             """
             result = bool(self.graph.query(transitive_query))
@@ -143,7 +216,8 @@ class SemanticTypeResolver:
             print(f"Error during transitive query: {e}")
             # Fall back to manual traversal
             return self._check_with_manual_traversal(narrower_iri, broader_iri)
-    
+        
+
     def _check_with_manual_traversal(self, narrower_iri, broader_iri):
         """Fallback manual traversal for when SPARQL transitive queries fail"""
         narrower_ref = rdflib.URIRef(narrower_iri)
@@ -151,7 +225,10 @@ class SemanticTypeResolver:
         
         visited = set()
         to_check = [narrower_ref]
+        
+        # Check both skos:broader and rdfs:subClassOf relationships
         broader_prop = rdflib.URIRef("http://www.w3.org/2004/02/skos/core#broader")
+        subclass_prop = rdflib.URIRef("http://www.w3.org/2000/01/rdf-schema#subClassOf")
         
         while to_check:
             current = to_check.pop(0)
@@ -160,15 +237,27 @@ class SemanticTypeResolver:
                 
             visited.add(current)
             
+            # Check skos:broader relationships
             for obj in self.graph.objects(current, broader_prop):
                 if obj == broader_ref:
-                    print(f"Manual traversal found path: {narrower_iri} -> {broader_iri}")
+                    print(f"Manual traversal found path via skos:broader: {narrower_iri} -> {broader_iri}")
+                    return True
+                to_check.append(obj)
+                
+            # Check rdfs:subClassOf relationships
+            for obj in self.graph.objects(current, subclass_prop):
+                if obj == broader_ref:
+                    print(f"Manual traversal found path via rdfs:subClassOf: {narrower_iri} -> {broader_iri}")
                     return True
                 to_check.append(obj)
         
         print(f"No path found between {narrower_iri} and {broader_iri}")
         return False
-    
+
+
+
+
+
     def add_test_relationship(self, narrower_iri, broader_iri):
         """Add a test relationship to the graph (useful for testing)"""
         narrower_ref = rdflib.URIRef(normalize_iri(narrower_iri))

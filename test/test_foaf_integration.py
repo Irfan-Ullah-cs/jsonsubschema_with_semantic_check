@@ -1,9 +1,7 @@
 """
 Created on May 13, 2025
-Comprehensive test cases for FOAF (Friend of a Friend) integration with jsonsubschema,
-focusing on loading, relationships, lazy loading, caching, and FOAF-specific functionality.
-
-Run the test file with pytest .\test_faof_integration.py -v
+Comprehensive test cases for FOAF (Friend of a Friend) integration with jsonsubschema.
+Run the test file with pytest .\test_foaf_integration_original.py -v
 """
 
 import pytest
@@ -37,42 +35,38 @@ def test_foaf_graph_loading():
     triple_count = len(resolver.graph)
     assert isinstance(triple_count, int), "Graph should have countable triples"
 
-def test_foaf_custom_extensions_loading():
-    """Test loading custom FOAF extensions via Turtle format"""
+def test_foaf_original_relationships_loading():
+    """Test loading original FOAF relationships via Turtle format"""
     SemanticTypeResolver.reset_instance()
     config.set_semantic_reasoning(True)
     
     resolver = SemanticTypeResolver.get_instance()
     
-    # Add custom FOAF extensions
-    custom_foaf_data = """
-    @prefix ex: <http://example.org/> .
+    # Add original FOAF relationships using rdfs:subClassOf (proper FOAF pattern)
+    original_foaf_data = """
     @prefix foaf: <http://xmlns.com/foaf/0.1/> .
-    @prefix skos: <http://www.w3.org/2004/02/skos/core#> .
+    @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
     
-    # Employment hierarchy
-    ex:Employee skos:broader foaf:Person .
-    ex:Manager skos:broader ex:Employee .
-    ex:CEO skos:broader ex:Manager .
+    # Standard FOAF class hierarchy
+    foaf:Person rdfs:subClassOf foaf:Agent .
+    foaf:Organization rdfs:subClassOf foaf:Agent .
+    foaf:Group rdfs:subClassOf foaf:Agent .
+    foaf:Project rdfs:subClassOf foaf:Agent .
     
-    # Organization hierarchy
-    ex:Company skos:broader foaf:Organization .
-    ex:StartUp skos:broader ex:Company .
-    
-    # Document hierarchy
-    ex:TechnicalDocument skos:broader foaf:Document .
-    ex:Report skos:broader ex:TechnicalDocument .
+    # FOAF document hierarchy
+    foaf:Image rdfs:subClassOf foaf:Document .
+    foaf:PersonalProfileDocument rdfs:subClassOf foaf:Document .
     """
     
-    # Parse custom data into graph
-    resolver.graph.parse(data=custom_foaf_data, format="turtle")
+    # Parse FOAF data into graph
+    resolver.graph.parse(data=original_foaf_data, format="turtle")
     
-    # Test that custom relationships are loaded
-    employee_to_person = resolver.is_subtype_of("ex:Employee", "foaf:Person")
-    manager_to_employee = resolver.is_subtype_of("ex:Manager", "ex:Employee")
+    # Test that FOAF relationships are loaded
+    person_to_agent = resolver.is_subtype_of("foaf:Person", "foaf:Agent")
+    org_to_agent = resolver.is_subtype_of("foaf:Organization", "foaf:Agent")
     
-    assert isinstance(employee_to_person, bool), "Should handle custom FOAF extensions"
-    assert isinstance(manager_to_employee, bool), "Should handle custom hierarchies"
+    assert isinstance(person_to_agent, bool), "Should handle original FOAF relationships"
+    assert isinstance(org_to_agent, bool), "Should handle original FOAF class hierarchies"
 
 def test_foaf_loading_failure_handling():
     """Test graceful handling when FOAF loading fails"""
@@ -92,75 +86,67 @@ def test_foaf_loading_failure_handling():
 # ===== FOAF Relationship Testing =====
 
 def test_foaf_basic_relationships():
-    """Test basic FOAF concept relationships"""
+    """Test basic FOAF concept relationships """
     SemanticTypeResolver.reset_instance()
     config.set_semantic_reasoning(True)
     
     resolver = SemanticTypeResolver.get_instance()
     
-    # Test core FOAF relationships (may depend on successful loading)
+    # Add standard FOAF relationships
+    foaf_relationships = """
+    @prefix foaf: <http://xmlns.com/foaf/0.1/> .
+    @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+    
+    foaf:Person rdfs:subClassOf foaf:Agent .
+    foaf:Organization rdfs:subClassOf foaf:Agent .
+    foaf:Group rdfs:subClassOf foaf:Agent .
+    """
+    
+    resolver.graph.parse(data=foaf_relationships, format="turtle")
+    
+    # Test core FOAF relationships
     person_agent = resolver.is_subtype_of("foaf:Person", "foaf:Agent")
     organization_agent = resolver.is_subtype_of("foaf:Organization", "foaf:Agent")
     group_agent = resolver.is_subtype_of("foaf:Group", "foaf:Agent")
     
- 
-
-    if person_agent:
-        # FOAF loaded successfully - test expected relationships
-        assert person_agent, "Person should be subtype of Agent in FOAF ontology"
-        # Organization and Group relationships depend on FOAF ontology structure
-        print(f"FOAF relationships - Person->Agent: {person_agent}, Organization->Agent: {organization_agent}, Group->Agent: {group_agent}")
-    else:
-        # FOAF may not have loaded - just verify we get boolean responses
-        print(f"FOAF ontology may not have loaded - got responses: Person->Agent: {person_agent}")
+    # Test expected relationships
+    assert person_agent, "Person should be subtype of Agent in FOAF ontology"
+    assert organization_agent, "Organization should be subtype of Agent in FOAF ontology"
+    assert group_agent, "Group should be subtype of Agent in FOAF ontology"
     
-    # All should return boolean regardless of loading success
-    assert isinstance(person_agent, bool), "Person-Agent relationship should return boolean"
-    assert isinstance(organization_agent, bool), "Organization-Agent relationship should return boolean"
-    assert isinstance(group_agent, bool), "Group-Agent relationship should return boolean"
+    print(f"FOAF relationships - Person->Agent: {person_agent}, Organization->Agent: {organization_agent}, Group->Agent: {group_agent}")
 
-def test_foaf_custom_relationship_hierarchy():
-    """Test custom FOAF relationship hierarchies"""
+def test_foaf_document_hierarchy():
+    """Test FOAF document class hierarchy"""
     SemanticTypeResolver.reset_instance()
     config.set_semantic_reasoning(True)
     
     resolver = SemanticTypeResolver.get_instance()
     
-    # Add employment hierarchy
-    employment_hierarchy = """
-    @prefix ex: <http://example.org/> .
+    # Add FOAF document hierarchy
+    document_hierarchy = """
     @prefix foaf: <http://xmlns.com/foaf/0.1/> .
-    @prefix skos: <http://www.w3.org/2004/02/skos/core#> .
+    @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
     
-    ex:Employee skos:broader foaf:Person .
-    ex:Manager skos:broader ex:Employee .
-    ex:CEO skos:broader ex:Manager .
-    ex:Consultant skos:broader foaf:Person .
+    foaf:Image rdfs:subClassOf foaf:Document .
+    foaf:PersonalProfileDocument rdfs:subClassOf foaf:Document .
     """
     
-    resolver.graph.parse(data=employment_hierarchy, format="turtle")
+    resolver.graph.parse(data=document_hierarchy, format="turtle")
     
-    # Test direct relationships
-    employee_person = resolver.is_subtype_of("ex:Employee", "foaf:Person")
-    manager_employee = resolver.is_subtype_of("ex:Manager", "ex:Employee")
+    # Test document relationships
+    image_document = resolver.is_subtype_of("foaf:Image", "foaf:Document")
+    profile_document = resolver.is_subtype_of("foaf:PersonalProfileDocument", "foaf:Document")
     
-    # Test transitive relationships
-    ceo_employee = resolver.is_subtype_of("ex:CEO", "ex:Employee")
-    ceo_person = resolver.is_subtype_of("ex:CEO", "foaf:Person")
-    
-    # Test non-relationships
-    consultant_manager = resolver.is_subtype_of("ex:Consultant", "ex:Manager")
+    # Test non-relationships (different document types)
+    image_profile = resolver.is_subtype_of("foaf:Image", "foaf:PersonalProfileDocument")
     
     # Direct relationships should be true
-    assert employee_person, "Employee should be subtype of Person (ex:Employee -> foaf:Person)"
-    assert manager_employee, "Manager should be subtype of Employee (ex:Manager -> ex:Employee)"
+    assert image_document, "Image should be subtype of Document (foaf:Image -> foaf:Document)"
+    assert profile_document, "PersonalProfileDocument should be subtype of Document"
     
-    # Transitive relationships should be true
-    assert ceo_employee, "CEO should be subtype of Employee transitively (ex:CEO -> ex:Manager -> ex:Employee)"
-    assert ceo_person, "CEO should be subtype of Person transitively (ex:CEO -> ex:Manager -> ex:Employee -> foaf:Person)"
-    
-    # Non-relationships should be false
-    assert not consultant_manager, "Consultant should not be subtype of Manager (different branch: ex:Consultant -> foaf:Person)"
+    # Non-relationships should be false (parallel classes)
+    assert not image_profile, "Image should not be subtype of PersonalProfileDocument (parallel classes)"
 
 def test_foaf_self_relationships():
     """Test that FOAF concepts are subtypes of themselves"""
@@ -174,7 +160,9 @@ def test_foaf_self_relationships():
         "foaf:Agent", 
         "foaf:Organization",
         "foaf:Group",
-        "foaf:Document"
+        "foaf:Document",
+        "foaf:Image",
+        "foaf:Project"
     ]
     
     for concept in foaf_concepts:
@@ -192,18 +180,17 @@ def test_foaf_relationship_caching():
     
     # Add test data
     test_data = """
-    @prefix ex: <http://example.org/> .
     @prefix foaf: <http://xmlns.com/foaf/0.1/> .
-    @prefix skos: <http://www.w3.org/2004/02/skos/core#> .
+    @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
     
-    ex:Employee skos:broader foaf:Person .
+    foaf:Person rdfs:subClassOf foaf:Agent .
     """
     
     resolver.graph.parse(data=test_data, format="turtle")
     
     # Query same relationship multiple times
-    concept1 = "ex:Employee"
-    concept2 = "foaf:Person"
+    concept1 = "foaf:Person"
+    concept2 = "foaf:Agent"
     
     results = []
     for i in range(5):
@@ -214,8 +201,6 @@ def test_foaf_relationship_caching():
     assert all(r == results[0] for r in results), "Cached FOAF relationship results should be consistent"
     
     # Test that cache has entry
-    cache_key = (resolver.normalize_iri(concept1) if hasattr(resolver, 'normalize_iri') else concept1, 
-                resolver.normalize_iri(concept2) if hasattr(resolver, 'normalize_iri') else concept2)
     assert hasattr(resolver, 'relation_cache'), "Resolver should have relation cache"
 
 def test_foaf_cache_consistency_across_queries():
@@ -227,30 +212,26 @@ def test_foaf_cache_consistency_across_queries():
     
     # Add test hierarchy
     hierarchy_data = """
-    @prefix ex: <http://example.org/> .
     @prefix foaf: <http://xmlns.com/foaf/0.1/> .
-    @prefix skos: <http://www.w3.org/2004/02/skos/core#> .
+    @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
     
-    ex:Manager skos:broader ex:Employee .
-    ex:Employee skos:broader foaf:Person .
+    foaf:Person rdfs:subClassOf foaf:Agent .
+    foaf:Organization rdfs:subClassOf foaf:Agent .
     """
     
     resolver.graph.parse(data=hierarchy_data, format="turtle")
     
     # Query relationships in different orders
-    manager_employee_1 = resolver.is_subtype_of("ex:Manager", "ex:Employee")
-    employee_person_1 = resolver.is_subtype_of("ex:Employee", "foaf:Person")
-    manager_person_1 = resolver.is_subtype_of("ex:Manager", "foaf:Person")
+    person_agent_1 = resolver.is_subtype_of("foaf:Person", "foaf:Agent")
+    org_agent_1 = resolver.is_subtype_of("foaf:Organization", "foaf:Agent")
     
     # Query again in different order
-    manager_person_2 = resolver.is_subtype_of("ex:Manager", "foaf:Person")
-    employee_person_2 = resolver.is_subtype_of("ex:Employee", "foaf:Person")
-    manager_employee_2 = resolver.is_subtype_of("ex:Manager", "ex:Employee")
+    org_agent_2 = resolver.is_subtype_of("foaf:Organization", "foaf:Agent")
+    person_agent_2 = resolver.is_subtype_of("foaf:Person", "foaf:Agent")
     
     # Results should be consistent
-    assert manager_employee_1 == manager_employee_2, "Manager-Employee relationship should be consistent"
-    assert employee_person_1 == employee_person_2, "Employee-Person relationship should be consistent"
-    assert manager_person_1 == manager_person_2, "Manager-Person relationship should be consistent"
+    assert person_agent_1 == person_agent_2, "Person-Agent relationship should be consistent"
+    assert org_agent_1 == org_agent_2, "Organization-Agent relationship should be consistent"
 
 # ===== FOAF Lazy Loading Tests =====
 
@@ -288,31 +269,30 @@ def test_foaf_on_demand_relationship_resolution():
     
     # Add data that will be queried
     foaf_data = """
-    @prefix ex: <http://example.org/> .
     @prefix foaf: <http://xmlns.com/foaf/0.1/> .
-    @prefix skos: <http://www.w3.org/2004/02/skos/core#> .
+    @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
     
-    ex:Student skos:broader foaf:Person .
-    ex:Professor skos:broader foaf:Person .
+    foaf:Person rdfs:subClassOf foaf:Agent .
+    foaf:Organization rdfs:subClassOf foaf:Agent .
     """
     
     resolver.graph.parse(data=foaf_data, format="turtle")
     
     # Test that queries work on-demand
-    student_person = resolver.is_subtype_of("ex:Student", "foaf:Person")
-    professor_person = resolver.is_subtype_of("ex:Professor", "foaf:Person")
-    student_professor = resolver.is_subtype_of("ex:Student", "ex:Professor")
+    person_agent = resolver.is_subtype_of("foaf:Person", "foaf:Agent")
+    org_agent = resolver.is_subtype_of("foaf:Organization", "foaf:Agent")
+    person_org = resolver.is_subtype_of("foaf:Person", "foaf:Organization")
     
-    # Based on the loaded hierarchy, both Student and Professor should be subtypes of Person
-    assert student_person, "Student should be subtype of Person (ex:Student -> foaf:Person)"
-    assert professor_person, "Professor should be subtype of Person (ex:Professor -> foaf:Person)"
-    # Student should NOT be subtype of Professor (different branches)
-    assert not student_professor, "Student should not be subtype of Professor (parallel branches under foaf:Person)"
+    # Based on the loaded hierarchy
+    assert person_agent, "Person should be subtype of Agent (foaf:Person -> foaf:Agent)"
+    assert org_agent, "Organization should be subtype of Agent (foaf:Organization -> foaf:Agent)"
+    # Person should NOT be subtype of Organization (parallel branches)
+    assert not person_org, "Person should not be subtype of Organization (parallel branches under foaf:Agent)"
 
 # ===== FOAF Schema Integration Tests =====
 
 def test_foaf_schema_semantic_compatibility():
-    """Test semantic compatibility with FOAF concepts in schemas"""
+    """Test semantic compatibility with original FOAF concepts in schemas"""
     SemanticTypeResolver.reset_instance()
     config.set_semantic_reasoning(True)
     
@@ -320,51 +300,50 @@ def test_foaf_schema_semantic_compatibility():
     
     # Add FOAF hierarchy
     foaf_hierarchy = """
-    @prefix ex: <http://example.org/> .
     @prefix foaf: <http://xmlns.com/foaf/0.1/> .
-    @prefix skos: <http://www.w3.org/2004/02/skos/core#> .
+    @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
     
-    ex:Employee skos:broader foaf:Person .
+    foaf:Person rdfs:subClassOf foaf:Agent .
     """
     
     resolver.graph.parse(data=foaf_hierarchy, format="turtle")
     
-    # Employee schema (more specific)
-    employee_schema = {
-        "type": "object",
-        "stype": "ex:Employee",
-        "properties": {
-            "foaf:name": {"type": "string"},
-            "employee_id": {"type": "string"}
-        }
-    }
-    
-    # Person schema (more general)
+    # Person schema (more specific)
     person_schema = {
         "type": "object",
         "stype": "foaf:Person",
+        "properties": {
+            "foaf:name": {"type": "string"},
+            "foaf:mbox": {"type": "string", "format": "email"}
+        }
+    }
+    
+    # Agent schema (more general)
+    agent_schema = {
+        "type": "object",
+        "stype": "foaf:Agent",
         "properties": {
             "foaf:name": {"type": "string"}
         }
     }
     
     # Test semantic compatibility
-    employee_to_person = is_semantically_compatible(employee_schema, person_schema, resolver)
-    person_to_employee = is_semantically_compatible(person_schema, employee_schema, resolver)
+    person_to_agent = is_semantically_compatible(person_schema, agent_schema, resolver)
+    agent_to_person = is_semantically_compatible(agent_schema, person_schema, resolver)
     
     # Test schema subtyping
-    employee_subtype_person = isSubschema(employee_schema, person_schema)
-    person_subtype_employee = isSubschema(person_schema, employee_schema)
+    person_subtype_agent = isSubschema(person_schema, agent_schema)
+    agent_subtype_person = isSubschema(agent_schema, person_schema)
     
-    # Employee should be semantically compatible with Person (more specific -> more general)
-    assert employee_to_person, "Employee should be semantically compatible with Person (ex:Employee -> foaf:Person)"
-    # Person should NOT be semantically compatible with Employee (more general -> more specific)
-    assert not person_to_employee, "Person should not be semantically compatible with Employee (foaf:Person -> ex:Employee)"
+    # Person should be semantically compatible with Agent (more specific -> more general)
+    assert person_to_agent, "Person should be semantically compatible with Agent (foaf:Person -> foaf:Agent)"
+    # Agent should NOT be semantically compatible with Person (more general -> more specific)
+    assert not agent_to_person, "Agent should not be semantically compatible with Person (foaf:Agent -> foaf:Person)"
     
-    # Employee should be subtype of Person (more restrictive schema -> less restrictive schema)
-    assert employee_subtype_person, "Employee schema should be subtype of Person schema (more specific properties)"
-    # Person should NOT be subtype of Employee (less restrictive -> more restrictive)
-    assert not person_subtype_employee, "Person schema should not be subtype of Employee schema (missing employee_id property)"
+    # Person should be subtype of Agent (more restrictive schema -> less restrictive schema)
+    assert person_subtype_agent, "Person schema should be subtype of Agent schema (more specific properties)"
+    # Agent should NOT be subtype of Person (less restrictive -> more restrictive)
+    assert not agent_subtype_person, "Agent schema should not be subtype of Person schema (missing foaf:mbox property)"
 
 def test_foaf_nested_schema_compatibility():
     """Test FOAF compatibility in nested schema structures"""
@@ -374,40 +353,23 @@ def test_foaf_nested_schema_compatibility():
     resolver = SemanticTypeResolver.get_instance()
     
     # Add organization hierarchy
-    org_hierarchy = """
-    @prefix ex: <http://example.org/> .
+    foaf_hierarchy = """
     @prefix foaf: <http://xmlns.com/foaf/0.1/> .
-    @prefix skos: <http://www.w3.org/2004/02/skos/core#> .
+    @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
     
-    ex:Company skos:broader foaf:Organization .
-    ex:Employee skos:broader foaf:Person .
+    foaf:Organization rdfs:subClassOf foaf:Agent .
+    foaf:Person rdfs:subClassOf foaf:Agent .
     """
     
-    resolver.graph.parse(data=org_hierarchy, format="turtle")
+    resolver.graph.parse(data=foaf_hierarchy, format="turtle")
     
-    # Company with employees (more specific)
-    company_schema = {
-        "type": "object",
-        "stype": "ex:Company",
-        "properties": {
-            "foaf:name": {"type": "string"},
-            "employees": {
-                "type": "array",
-                "items": {
-                    "type": "object",
-                    "stype": "ex:Employee"
-                }
-            }
-        }
-    }
-    
-    # Organization with people (more general)
-    org_schema = {
+    # Organization with people (specific)
+    org_with_people_schema = {
         "type": "object",
         "stype": "foaf:Organization",
         "properties": {
             "foaf:name": {"type": "string"},
-            "employees": {
+            "foaf:member": {
                 "type": "array",
                 "items": {
                     "type": "object",
@@ -417,14 +379,30 @@ def test_foaf_nested_schema_compatibility():
         }
     }
     
-    # Test nested compatibility
-    company_to_org = isSubschema(company_schema, org_schema)
-    org_to_company = isSubschema(org_schema, company_schema)
+    # Agent with agents (more general)
+    agent_with_agents_schema = {
+        "type": "object",
+        "stype": "foaf:Agent",
+        "properties": {
+            "foaf:name": {"type": "string"},
+            "foaf:member": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "stype": "foaf:Agent"
+                }
+            }
+        }
+    }
     
-    # Company should be subtype of Organization (more specific -> more general)
-    assert company_to_org, "Company schema should be subtype of Organization schema (ex:Company -> foaf:Organization, ex:Employee -> foaf:Person)"
-    # Organization should NOT be subtype of Company (more general -> more specific)
-    assert not org_to_company, "Organization schema should not be subtype of Company schema (foaf:Organization -> ex:Company, foaf:Person -> ex:Employee)"
+    # Test nested compatibility
+    org_to_agent = isSubschema(org_with_people_schema, agent_with_agents_schema)
+    agent_to_org = isSubschema(agent_with_agents_schema, org_with_people_schema)
+    
+    # Organization should be subtype of Agent (more specific -> more general)
+    assert org_to_agent, "Organization schema should be subtype of Agent schema (foaf:Organization -> foaf:Agent, foaf:Person -> foaf:Agent)"
+    # Agent should NOT be subtype of Organization (more general -> more specific)
+    assert not agent_to_org, "Agent schema should not be subtype of Organization schema (foaf:Agent -> foaf:Organization, foaf:Agent -> foaf:Person)"
 
 # ===== FOAF IRI Normalization Tests =====
 
@@ -436,7 +414,9 @@ def test_foaf_iri_normalization():
         ("foaf:Agent", "http://xmlns.com/foaf/0.1/Agent"),
         ("foaf:Organization", "http://xmlns.com/foaf/0.1/Organization"),
         ("foaf:Group", "http://xmlns.com/foaf/0.1/Group"),
-        ("foaf:Document", "http://xmlns.com/foaf/0.1/Document")
+        ("foaf:Document", "http://xmlns.com/foaf/0.1/Document"),
+        ("foaf:Image", "http://xmlns.com/foaf/0.1/Image"),
+        ("foaf:Project", "http://xmlns.com/foaf/0.1/Project")
     ]
     
     for compact, expected_full in foaf_cases:
@@ -449,6 +429,16 @@ def test_foaf_mixed_iri_formats():
     config.set_semantic_reasoning(True)
     
     resolver = SemanticTypeResolver.get_instance()
+    
+    # Add test relationship
+    test_data = """
+    @prefix foaf: <http://xmlns.com/foaf/0.1/> .
+    @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+    
+    foaf:Person rdfs:subClassOf foaf:Agent .
+    """
+    
+    resolver.graph.parse(data=test_data, format="turtle")
     
     # Test relationships using both compact and full IRIs
     compact_to_full = resolver.is_subtype_of(
@@ -464,12 +454,9 @@ def test_foaf_mixed_iri_formats():
     # Both should work and give same result due to IRI normalization
     assert compact_to_full == full_to_compact, "Mixed IRI formats should give same result due to normalization"
     
-    # If FOAF loaded successfully, Person should be subtype of Agent
-    if compact_to_full:
-        assert compact_to_full, "Person should be subtype of Agent (regardless of IRI format)"
-        assert full_to_compact, "Person should be subtype of Agent (regardless of IRI format)"
-    else:
-        print("FOAF ontology may not have loaded - mixed IRI format test completed without relationship validation")
+    # Both should be true based on our test data
+    assert compact_to_full, "Person should be subtype of Agent (regardless of IRI format)"
+    assert full_to_compact, "Person should be subtype of Agent (regardless of IRI format)"
 
 # ===== FOAF Error Handling Tests =====
 
@@ -500,11 +487,11 @@ def test_foaf_malformed_data_handling():
     # Try to parse malformed Turtle data
     malformed_data = """
     @prefix foaf: <http://xmlns.com/foaf/0.1/> .
-    @prefix skos: <http://www.w3.org/2004/02/skos/core#> .
+    @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
     
     # Missing closing bracket and other syntax errors
-    ex:Employee skos:broader foaf:Person
-    ex:Manager skos:broader ex:Employee .
+    foaf:Person rdfs:subClassOf foaf:Agent
+    foaf:Organization rdfs:subClassOf foaf:Agent .
     """
     
     # Should handle parsing errors gracefully
@@ -524,23 +511,22 @@ def test_foaf_circular_relationships():
     
     resolver = SemanticTypeResolver.get_instance()
     
-    # Add circular relationship data
+    # Add circular relationship data (artificial for testing)
     circular_data = """
-    @prefix ex: <http://example.org/> .
     @prefix foaf: <http://xmlns.com/foaf/0.1/> .
-    @prefix skos: <http://www.w3.org/2004/02/skos/core#> .
+    @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
     
-    ex:A skos:broader ex:B .
-    ex:B skos:broader ex:C .
-    ex:C skos:broader ex:A .
+    foaf:TestA rdfs:subClassOf foaf:TestB .
+    foaf:TestB rdfs:subClassOf foaf:TestC .
+    foaf:TestC rdfs:subClassOf foaf:TestA .
     """
     
     resolver.graph.parse(data=circular_data, format="turtle")
     
     # Test that circular relationships don't cause infinite loops
-    result_ab = resolver.is_subtype_of("ex:A", "ex:B")
-    result_bc = resolver.is_subtype_of("ex:B", "ex:C")
-    result_ca = resolver.is_subtype_of("ex:C", "ex:A")
+    result_ab = resolver.is_subtype_of("foaf:TestA", "foaf:TestB")
+    result_bc = resolver.is_subtype_of("foaf:TestB", "foaf:TestC")
+    result_ca = resolver.is_subtype_of("foaf:TestC", "foaf:TestA")
     
     assert isinstance(result_ab, bool), "Should handle circular relationships without infinite loops"
     assert isinstance(result_bc, bool), "Should handle circular relationships without infinite loops"
@@ -554,8 +540,6 @@ def test_foaf_semantic_reasoning_toggle():
     SemanticTypeResolver.reset_instance()
     config.set_semantic_reasoning(True)
     
-    resolver_enabled = SemanticTypeResolver.get_instance()
-    
     foaf_schema_enabled = {
         "type": "object",
         "stype": "foaf:Person"
@@ -566,8 +550,6 @@ def test_foaf_semantic_reasoning_toggle():
     # Test with semantic reasoning disabled
     SemanticTypeResolver.reset_instance()
     config.set_semantic_reasoning(False)
-    
-    resolver_disabled = SemanticTypeResolver.get_instance()
     
     foaf_schema_disabled = {
         "type": "object",
@@ -595,6 +577,44 @@ def test_foaf_custom_graph_urls():
     # Should remain functional
     result = resolver.is_subtype_of("foaf:Person", "foaf:Person")
     assert result, "Should remain functional with custom graph URLs"
+
+# ===== FOAF Properties Tests =====
+
+def test_foaf_properties_in_schemas():
+    """Test using original FOAF properties in schemas"""
+    SemanticTypeResolver.reset_instance()
+    config.set_semantic_reasoning(True)
+    
+    # Schema using standard FOAF properties
+    person_with_foaf_props = {
+        "type": "object",
+        "stype": "foaf:Person",
+        "properties": {
+            "foaf:name": {"type": "string"},
+            "foaf:mbox": {"type": "string", "format": "email"},
+            "foaf:homepage": {"type": "string", "format": "uri"},
+            "foaf:phone": {"type": "string"},
+            "foaf:img": {"type": "string", "format": "uri"}
+        },
+        "required": ["foaf:name"]
+    }
+    
+    # Schema with subset of properties
+    person_minimal = {
+        "type": "object",
+        "stype": "foaf:Person",
+        "properties": {
+            "foaf:name": {"type": "string"}
+        },
+        "required": ["foaf:name"]
+    }
+    
+    # More specific should be subtype of less specific
+    specific_to_general = isSubschema(person_with_foaf_props, person_minimal)
+    general_to_specific = isSubschema(person_minimal, person_with_foaf_props)
+    
+    assert specific_to_general, "Schema with more FOAF properties should be subtype of schema with fewer properties"
+    assert not general_to_specific, "Schema with fewer FOAF properties should not be subtype of schema with more properties"
 
 if __name__ == "__main__":
     pytest.main(["-v", __file__])

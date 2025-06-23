@@ -2,21 +2,44 @@
 Created on May 13, 2025
 Consolidated tests for semantic type checking (stype) in jsonsubschema,
 with SKOS hierarchy support and basic meet/join operations.
+CORRECTED VERSION - Replace your entire test file with this.
 """
 
 import pytest
 import json
 import os
+import rdflib
 from jsonsubschema.api import isSubschema, meet, join, isEquivalent
 from jsonsubschema.semantic_type import SemanticTypeResolver, normalize_iri
+
+
+def setup_test_graph():
+    """Setup a test graph with QUDT relationships for testing"""
+    graph = rdflib.Graph()
+    
+    # Add test QUDT relationships
+    test_data = """
+    @prefix quantitykind: <http://qudt.org/vocab/quantitykind/> .
+    @prefix skos: <http://www.w3.org/2004/02/skos/core#> .
+    
+    quantitykind:RelativeHumidity skos:broader quantitykind:RelativePartialPressure .
+    quantitykind:RelativePartialPressure skos:broader quantitykind:PressureRatio .
+    quantitykind:Temperature skos:broader quantitykind:ThermodynamicTemperature .
+    """
+    
+    graph.parse(data=test_data, format="turtle")
+    return graph
 
 
 # ===== SKOS Hierarchy and IRI Normalization Tests =====
 
 def test_singleton_resolver():
     """Test that SemanticTypeResolver uses the singleton pattern correctly"""
-    resolver1 = SemanticTypeResolver.get_instance()
-    resolver2 = SemanticTypeResolver.get_instance()
+    SemanticTypeResolver.reset_instance()
+    graph = setup_test_graph()
+    
+    resolver1 = SemanticTypeResolver.get_instance(graph=graph, lazy_load=False)
+    resolver2 = SemanticTypeResolver.get_instance(graph=graph, lazy_load=False)
     assert resolver1 is resolver2, "Should return the same instance"
 
 def test_normalize_iri():
@@ -37,7 +60,9 @@ def test_normalize_iri():
 
 def test_skos_direct_relationship():
     """Test direct subtype relationship in SKOS"""
-    resolver = SemanticTypeResolver.get_instance()
+    SemanticTypeResolver.reset_instance()
+    graph = setup_test_graph()
+    resolver = SemanticTypeResolver.get_instance(graph=graph, lazy_load=False)
     
     # Check direct relationship
     direct_result = resolver.is_subtype_of(
@@ -48,7 +73,9 @@ def test_skos_direct_relationship():
 
 def test_skos_transitive_relationship():
     """Test transitive subtype relationship in SKOS"""
-    resolver = SemanticTypeResolver.get_instance()
+    SemanticTypeResolver.reset_instance()
+    graph = setup_test_graph()
+    resolver = SemanticTypeResolver.get_instance(graph=graph, lazy_load=False)
     
     # Check transitive relationship
     transitive_result = resolver.is_subtype_of(
@@ -59,7 +86,9 @@ def test_skos_transitive_relationship():
 
 def test_skos_compact_notation():
     """Test compact notation support for SKOS concepts"""
-    resolver = SemanticTypeResolver.get_instance()
+    SemanticTypeResolver.reset_instance()
+    graph = setup_test_graph()
+    resolver = SemanticTypeResolver.get_instance(graph=graph, lazy_load=False)
     
     # Check with compact notation
     compact_result = resolver.is_subtype_of(
@@ -70,7 +99,9 @@ def test_skos_compact_notation():
 
 def test_skos_non_relationship():
     """Test cases where concepts are not related"""
-    resolver = SemanticTypeResolver.get_instance()
+    SemanticTypeResolver.reset_instance()
+    graph = setup_test_graph()
+    resolver = SemanticTypeResolver.get_instance(graph=graph, lazy_load=False)
     
     # Check unrelated concepts
     unrelated_result = resolver.is_subtype_of(
@@ -78,13 +109,16 @@ def test_skos_non_relationship():
         "http://qudt.org/vocab/quantitykind/Pressure"
     )
     
-
     assert not unrelated_result, "Unrelated concepts should not be subtypes"
 
 # ===== Schema Subtyping with SKOS Tests =====
 
 def test_schema_with_skos_concepts():
     """Test schema subtyping with SKOS concept hierarchies"""
+    SemanticTypeResolver.reset_instance()
+    graph = setup_test_graph()
+    resolver = SemanticTypeResolver.get_instance(graph=graph, lazy_load=False)
+    
     # Define schemas with SKOS concepts
     specific_schema = {
         "type": "number",
@@ -102,6 +136,10 @@ def test_schema_with_skos_concepts():
 
 def test_nested_schema_with_skos():
     """Test nested schemas with SKOS concepts"""
+    SemanticTypeResolver.reset_instance()
+    graph = setup_test_graph()
+    resolver = SemanticTypeResolver.get_instance(graph=graph, lazy_load=False)
+    
     # Define nested schemas with SKOS concepts
     nested_specific = {
         "type": "object",
@@ -129,6 +167,10 @@ def test_nested_schema_with_skos():
 
 def test_real_world_sensor_schemas():
     """Test with realistic sensor data schemas"""
+    SemanticTypeResolver.reset_instance()
+    graph = setup_test_graph()
+    resolver = SemanticTypeResolver.get_instance(graph=graph, lazy_load=False)
+    
     # Define realistic sensor schemas
     humidity_sensor = {
         "type": "object",
@@ -172,6 +214,10 @@ def test_real_world_sensor_schemas():
 
 def test_meet_with_identical_semantic_types():
     """Test meet operation with identical semantic types"""
+    SemanticTypeResolver.reset_instance()
+    graph = setup_test_graph()
+    resolver = SemanticTypeResolver.get_instance(graph=graph, lazy_load=False)
+    
     # Define schemas with identical semantic types
     schema1 = {
         "type": "number",
@@ -196,39 +242,12 @@ def test_meet_with_identical_semantic_types():
     assert result.get("maximum") == 100, "Meet should take minimum of maximums"
     assert result.get("stype") == "quantitykind:Temperature", "Meet should preserve identical semantic type"
 
-
-
-# ===== Join Operation Tests with Semantic Types =====
-
-def test_join_with_identical_semantic_types():
-    """Test join operation with identical semantic types"""
-    # Define schemas with identical semantic types
-    schema1 = {
-        "type": "number",
-        "minimum": 0,
-        "maximum": 100,
-        "stype": "quantitykind:Temperature"
-    }
+def test_meet_with_hierarchical_semantic_types():
+    """Test meet operation with hierarchical semantic types"""
+    SemanticTypeResolver.reset_instance()
+    graph = setup_test_graph()
+    resolver = SemanticTypeResolver.get_instance(graph=graph, lazy_load=False)
     
-    schema2 = {
-        "type": "number",
-        "minimum": 50,
-        "maximum": 150,
-        "stype": "quantitykind:Temperature"
-    }
-    
-
-    # Perform join operation
-    result = join(schema1, schema2)
-    
-    # Test result
-    assert result.get("type") == "number", "Join should preserve type"
-    assert result.get("minimum") == 0, "Join should take minimum of minimums"
-    assert result.get("maximum") == 150, "Join should take maximum of maximums"
-    assert result.get("stype") == "quantitykind:Temperature", "Join should preserve identical semantic type"
-
-def test_join_with_hierarchical_semantic_types():
-    """Test join operation with hierarchical semantic types"""
     # Define schemas with hierarchical semantic types
     schema1 = {
         "type": "number",
@@ -244,7 +263,69 @@ def test_join_with_hierarchical_semantic_types():
         "stype": "quantitykind:PressureRatio"  # More general
     }
     
+    # Perform meet operation
+    result = meet(schema1, schema2)
+    
+    # Test result
+    assert result.get("type") == "number", "Meet should preserve type"
+    assert result.get("minimum") == 50, "Meet should take maximum of minimums"
+    assert result.get("maximum") == 100, "Meet should take minimum of maximums"
+    assert result.get("stype") in ["quantitykind:RelativeHumidity", "http://qudt.org/vocab/quantitykind/RelativeHumidity"], \
+            "Meet should preserve more specific semantic type"
 
+# ===== Join Operation Tests with Semantic Types =====
+
+def test_join_with_identical_semantic_types():
+    """Test join operation with identical semantic types"""
+    SemanticTypeResolver.reset_instance()
+    graph = setup_test_graph()
+    resolver = SemanticTypeResolver.get_instance(graph=graph, lazy_load=False)
+    
+    # Define schemas with identical semantic types
+    schema1 = {
+        "type": "number",
+        "minimum": 0,
+        "maximum": 100,
+        "stype": "quantitykind:Temperature"
+    }
+    
+    schema2 = {
+        "type": "number",
+        "minimum": 50,
+        "maximum": 150,
+        "stype": "quantitykind:Temperature"
+    }
+    
+    # Perform join operation
+    result = join(schema1, schema2)
+    
+    # Test result
+    assert result.get("type") == "number", "Join should preserve type"
+    assert result.get("minimum") == 0, "Join should take minimum of minimums"
+    assert result.get("maximum") == 150, "Join should take maximum of maximums"
+    assert result.get("stype") == "quantitykind:Temperature", "Join should preserve identical semantic type"
+
+def test_join_with_hierarchical_semantic_types():
+    """Test join operation with hierarchical semantic types"""
+    SemanticTypeResolver.reset_instance()
+    graph = setup_test_graph()
+    resolver = SemanticTypeResolver.get_instance(graph=graph, lazy_load=False)
+    
+    # Define schemas with hierarchical semantic types
+    schema1 = {
+        "type": "number",
+        "minimum": 0,
+        "maximum": 100,
+        "stype": "quantitykind:RelativeHumidity"  # More specific
+    }
+    
+    schema2 = {
+        "type": "number",
+        "minimum": 50,
+        "maximum": 150,
+        "stype": "quantitykind:PressureRatio"  # More general
+    }
+    
     # Perform join operation
     result = join(schema1, schema2)
     
@@ -255,11 +336,14 @@ def test_join_with_hierarchical_semantic_types():
     assert result.get("stype") in ["quantitykind:PressureRatio", "http://qudt.org/vocab/quantitykind/PressureRatio"], \
             "Join should preserve more general semantic type"
 
-
 # ===== CLI Interface Tests =====
 
 def test_cli_with_semantic_types():
     """Test CLI interface with semantic type checking"""
+    SemanticTypeResolver.reset_instance()
+    graph = setup_test_graph()
+    resolver = SemanticTypeResolver.get_instance(graph=graph, lazy_load=False)
+    
     # Create test schema files
     humidity_schema = {
         "type": "number",

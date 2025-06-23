@@ -42,22 +42,38 @@ print(f"Is humidity a dimensionless ratio? {result}")  # True
 ```
 
 
+
 ## Installation
 
 ### Requirements
-- Python 3.8+
-- Internet connection (for ontology loading)
+* Python 3.7+
+* Internet connection (for ontology loading)
 
 ### Install from Source
 
 ```bash
 git clone https://github.com/Irfan-Ullah-cs/jsonsubschema_with_semantic_check.git
 cd jsonsubschema_with_semantic_check
-pip install -r requirements.txt
-python setup.py install
+pip install .
 ```
 
-### Install Original Version from PyPI
+### Install from PyPI (when published)
+
+```bash
+pip install jsonsubschema-with-semantic
+```
+
+### Development Installation
+
+```bash
+git clone https://github.com/Irfan-Ullah-cs/jsonsubschema_with_semantic_check.git
+cd jsonsubschema_with_semantic_check
+pip install -e .
+```
+
+### Original Version (IBM)
+
+If you need the original version 
 
 ```bash
 pip install jsonsubschema
