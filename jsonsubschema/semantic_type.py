@@ -135,7 +135,7 @@ class SemanticTypeResolver:
             """
             self.graph.query(test_query)
             self.supports_transitive_queries = True
-            print("RDF store supports transitive property path queries")
+            
         except Exception as e:
             self.supports_transitive_queries = False
             print(f"RDF store does not support transitive queries: {e}")

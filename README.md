@@ -97,32 +97,76 @@ print(f'Is s1 a subschema of s2? {isSubschema(s1, s2)}')  # True
 
 #### Semantic Validation
 ```python
-from jsonsubschema import isSubschema, meet, join, isEquivalent
+from jsonsubschema import isSubschema
+from jsonsubschema.semantic_type import SemanticTypeResolver
+import jsonsubschema.config as config
+import rdflib
+
+# Disable debug output for cleaner results
+config.set_debug(False)
+
+# Enable semantic reasoning
+config.set_semantic_reasoning(True)
+
+# Set up semantic graph with test relationships
+graph = rdflib.Graph()
+test_data = """
+@prefix quantitykind: <http://qudt.org/vocab/quantitykind/> .
+@prefix skos: <http://www.w3.org/2004/02/skos/core#> .
+
+quantitykind:ThermodynamicTemperature skos:broader quantitykind:Temperature .
+"""
+graph.parse(data=test_data, format="turtle")
+
+# Initialize resolver with the graph (suppress internal prints)
+resolver = SemanticTypeResolver.get_instance(graph=graph)
 
 # Schemas with semantic annotations
-temperature_schema = {
-    "type": "number",
-    "minimum": -273.15,
-    "stype": "quantitykind:Temperature"
-}
-
 thermodynamic_temp_schema = {
     "type": "number",
     "minimum": 0,
-    "stype": "quantitykind:ThermodynamicTemperature"
+    "stype": "quantitykind:ThermodynamicTemperature"  # More specific
 }
 
-# Semantic validation
+temperature_schema = {
+    "type": "number", 
+    "minimum": -273.15,
+    "stype": "quantitykind:Temperature"  # More general
+}
+
+# Only your print - semantic validation
 is_subtype = isSubschema(thermodynamic_temp_schema, temperature_schema)
 print(f"Is thermodynamic temperature a subtype of temperature? {is_subtype}")
-
-# Schema operations with semantic awareness
-common_schema = meet(temperature_schema, thermodynamic_temp_schema)
-union_schema = join(temperature_schema, thermodynamic_temp_schema)
 ```
 
 #### Nested Schemas
 ```python
+# IoT sensor data schema
+from jsonsubschema import isSubschema
+from jsonsubschema.semantic_type import SemanticTypeResolver
+import jsonsubschema.config as config
+import rdflib
+
+# Disable debug output for cleaner results
+config.set_debug(False)
+
+# Enable semantic reasoning
+config.set_semantic_reasoning(True)
+
+# Set up semantic graph with test relationships
+graph = rdflib.Graph()
+test_data = """
+@prefix quantitykind: <http://qudt.org/vocab/quantitykind/> .
+@prefix skos: <http://www.w3.org/2004/02/skos/core#> .
+
+quantitykind:ThermodynamicTemperature skos:broader quantitykind:Temperature .
+"""
+graph.parse(data=test_data, format="turtle")
+
+# Initialize resolver with the graph (suppress internal prints)
+resolver = SemanticTypeResolver.get_instance(graph=graph)
+
+
 # IoT sensor data schema
 sensor_schema = {
     "type": "object",
@@ -154,18 +198,33 @@ environmental_schema = {
 }
 
 # Deep semantic validation
-is_compatible = isSubschema(sensor_schema, environmental_schema)
+isSubschema(sensor_schema, environmental_schema) #TEmprature is not subType of ThermodynomicTemperature
+
+isSubschema(environmental_schema, sensor_schema) #TEmprature is  subType of ThermodynomicTemperature
 ```
 
 ### CLI Interface
 
 ```bash
 # Create semantic schemas
-echo '{"type": "number", "stype": "quantitykind:Temperature"}' > temp.json
-echo '{"type": "number", "stype": "quantitykind:ThermodynamicTemperature"}' > thermo.json
+echo '{
+  "type": "number",
+  "stype": "quantitykind:PressureRatio",
+  "minimum": 0
+}' > PressureRatio.json
+```
 
+```bash
+echo '{
+  "type": "number",
+  "stype": "quantitykind:RelativeHumidity",
+  "minimum": 0,
+  "maximum": 100
+}' > RelativeHumidity.json
+```
+```bash
 # Check semantic relationship
-python -m jsonsubschema.cli thermo.json temp.json
+python -m jsonsubschema.cli --ontology qudt  .\humidity_schema.json .\pressure_ratio_schema.json
 ```
 
 ## Testing
