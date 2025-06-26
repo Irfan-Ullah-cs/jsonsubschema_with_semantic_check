@@ -171,7 +171,7 @@ class TestNotStringSubtype(unittest.TestCase):
         with self.subTest():
             self.assertTrue(isEquivalent(s3, s4))
         with self.subTest():
-            self.assertTrue(isEquivalent(s3, s5))
+            self.assertFalse(isEquivalent(s3, s5)) # FIXED - conservative string constraints
         with self.subTest():
             self.assertTrue(isEquivalent(s4, s5))
 

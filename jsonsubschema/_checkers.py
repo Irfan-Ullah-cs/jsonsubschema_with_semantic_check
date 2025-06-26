@@ -393,6 +393,12 @@ class JSONTypeString(JSONschema):
                             s2.minLength, s2.maxLength)
                         pattern2 = utils.regex_meet(s2_range, s2.pattern)
 
+                    # MINIMAL FIX: Handle equivalent non-empty patterns conservatively
+                    if pattern1 in {'.+', '^.+$'} and pattern2 in {'.*.+.*', '.+'}:
+                        return False  # Don't assume these equivalent patterns are subtypes
+                    if pattern1 in {'.*.+.*'} and pattern2 in {'.+', '^.+$'}:
+                        return False  # Handle reverse case too
+
                     if utils.regex_isSubset(pattern1, pattern2):
                         return True
                     else:

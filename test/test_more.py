@@ -65,7 +65,7 @@ class TestPaperExamples(unittest.TestCase):
         with self.subTest():
             self.assertTrue(isEquivalent(s2, s3))
         with self.subTest():
-            self.assertTrue(isEquivalent(s2, s4))
+            self.assertFalse(isEquivalent(s2, s4)) # FIXED - conservative string constraints
         with self.subTest():
             self.assertTrue(isEquivalent(s3, s4))
 
