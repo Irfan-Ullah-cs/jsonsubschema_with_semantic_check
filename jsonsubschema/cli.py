@@ -84,7 +84,33 @@ def setup_semantic_graph(ontologies, custom_graph_file, lazy_load):
     return graph if len(graph) > 0 else None
 
 
+def check_schemas_for_stype(s1, s2):
+    """Check if schemas contain stype fields"""
+    def has_stype_recursive(schema):
+        if isinstance(schema, dict):
+            if 'stype' in schema:
+                return True
+            for key, value in schema.items():
+                if key in ['properties', 'items', 'anyOf', 'allOf', 'oneOf']:
+                    if isinstance(value, dict) and has_stype_recursive(value):
+                        return True
+                    elif isinstance(value, list):
+                        for item in value:
+                            if has_stype_recursive(item):
+                                return True
+        elif isinstance(schema, list):
+            for item in schema:
+                if has_stype_recursive(item):
+                    return True
+        return False
+    
+    return has_stype_recursive(s1) or has_stype_recursive(s2)
+
+
 def main():
+
+
+
     """CLI entry point for jsonsubschema with semantic ontology support"""
     
     parser = argparse.ArgumentParser(
@@ -128,10 +154,31 @@ Examples:
     
     # Parse arguments
     args = parser.parse_args()
-    
+        # Load and validate schemas
+    s1 = load_json_file(args.LHS, "LHS file:")
+    s2 = load_json_file(args.RHS, "RHS file:")
+
+    # Check if schemas contain stype but no ontology provided
+    if check_schemas_for_stype(s1, s2):
+        if not args.ontology and not args.graph:
+            print("ERROR: Schemas contain semantic types (stype) but no ontology provided!")
+            print("       Use --ontology flag to specify an ontology:")
+            print("       --ontology foaf    (for FOAF types like foaf:Person)")
+            print("       --ontology qudt    (for QUDT types like quantitykind:Temperature)")
+            print("       --ontology skos    (for SKOS types)")
+            print("       OR use --graph to load custom RDF file")
+            print("       OR remove stype fields for structural-only validation")
+            return 1
+        
+
+
+
+        
     # Setup semantic graph based on user preferences
     semantic_graph = setup_semantic_graph(args.ontology, args.graph, args.lazy_load)
     
+    
+
     # Initialize semantic resolver if semantic features are requested
     if semantic_graph is not None or args.lazy_load:
         SemanticTypeResolver.get_instance(graph=semantic_graph, lazy_load=args.lazy_load)

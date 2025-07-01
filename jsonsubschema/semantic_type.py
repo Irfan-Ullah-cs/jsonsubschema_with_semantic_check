@@ -74,7 +74,7 @@ class SemanticTypeResolver:
         
         self.fetched_namespaces = set()  # Track what namespaces we've already fetched
 
-        print(f"SemanticTypeResolver initialized with {len(self.graph)} triples, lazy_load={lazy_load}")
+        # print(f"SemanticTypeResolver initialized with {len(self.graph)} triples, lazy_load={lazy_load}")
     
 
 
@@ -145,7 +145,7 @@ class SemanticTypeResolver:
     
     def is_subtype_of(self, narrower_iri, broader_iri):
         """
-        Check if narrower_iri is a subtype of broader_iri using SKOS broader relationship.
+        Check if narrower_iri is a subtype of broader_iri using SKOS broader of SubType relationship.
         Returns True if narrower_iri is the same as or narrower than broader_iri.
         """
         # Skip semantic checking if disabled
@@ -298,7 +298,7 @@ def normalize_iri(stype_value):
         "quantitykind": "http://qudt.org/vocab/quantitykind/",
         "qudt": "http://qudt.org/schema/qudt/",
         "skos": "http://www.w3.org/2004/02/skos/core#",
-        "ex": "http://example.org/",  # Added for testing
+        "ex": "http://example.org/ontology#",
         "foaf": "http://xmlns.com/foaf/0.1/"
     }
     
@@ -345,8 +345,11 @@ def is_semantically_compatible(s1, s2, resolver=None):
 
 def _check_semantic_types_compatible(s1, s2, resolver):
     """Check if the semantic types at the current level are compatible"""
-    s1_stype = s1.get('stype')
-    s2_stype = s2.get('stype')
+    s1_stype = _get_schema_stype(s1)
+    s2_stype = _get_schema_stype(s2)
+    
+    # # Debug print
+    # print(f" s1_stype={s1_stype}, s2_stype={s2_stype}")
     
     # If neither has semantic types, they're compatible at this level
     if s1_stype is None and s2_stype is None:
@@ -354,7 +357,7 @@ def _check_semantic_types_compatible(s1, s2, resolver):
     
     # If s1 has stype but s2 doesn't, s1 is more specific than s2 (compatible)
     if s1_stype is not None and s2_stype is None:
-        return True  # s1 (more specific) is subtype of s2 (more general)
+        return True
     
     # If s1 doesn't have stype but s2 does, s1 is more general than s2 (incompatible)
     if s1_stype is None and s2_stype is not None:
@@ -366,6 +369,30 @@ def _check_semantic_types_compatible(s1, s2, resolver):
     if not compatible:
         print(f"Semantic incompatibility: {s1_stype} is not a subtype of {s2_stype}")
     return compatible
+
+
+
+def _get_schema_stype(schema):
+    """Extract stype from schema, handling anyOf/allOf structures"""
+    
+    # Direct stype in dict
+    if isinstance(schema, dict) and 'stype' in schema:
+        return schema['stype']
+    
+    # Check if it's a JSONanyOf object with anyOf items
+    if hasattr(schema, 'anyOf'):
+        for item in schema.anyOf:
+            if isinstance(item, dict) and 'stype' in item:
+                return item['stype']
+    
+    # Check if it's a dict with anyOf
+    if isinstance(schema, dict) and 'anyOf' in schema:
+        for item in schema['anyOf']:
+            if isinstance(item, dict) and 'stype' in item:
+                return item['stype']
+    
+    return None
+
 
 
 def _check_nested_semantic_compatibility(s1, s2, resolver):
@@ -530,3 +557,4 @@ def _check_boolean_connectives_semantic_compatibility(s1, s2, resolver):
         return False
     
     return True
+
