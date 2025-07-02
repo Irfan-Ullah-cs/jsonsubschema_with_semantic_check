@@ -22,8 +22,26 @@ This fork extends the original IBM jsonsubschema library with semantic validatio
 
 ```python
 from jsonsubschema import isSubschema
+from jsonsubschema.semantic_type import SemanticTypeResolver
+import jsonsubschema.config as config
+import rdflib
 
-# Schemas with semantic type annotations
+# Configure
+config.set_debug(False)
+config.set_semantic_reasoning(True)
+
+# Reset resolver
+SemanticTypeResolver.reset_instance()
+
+# Load real QUDT ontology
+graph = rdflib.Graph()
+print("Loading ...")
+graph.parse("http://qudt.org/vocab/quantitykind", format="turtle")
+
+# Initialize resolver
+resolver = SemanticTypeResolver.get_instance(graph=graph)
+
+# Schemas using relationships that actually exist in QUDT
 humidity_schema = {
     "type": "number",
     "minimum": 0,
@@ -33,12 +51,12 @@ humidity_schema = {
 
 dimensionless_schema = {
     "type": "number",
-    "stype": "quantitykind:DimensionlessRatio"
+    "stype": "quantitykind:Dimensionless"
 }
 
-# Enhanced validation considers semantic relationships
+# Test the relationship that works
 result = isSubschema(humidity_schema, dimensionless_schema)
-print(f"Is humidity a dimensionless ratio? {result}")  # True
+print(f"Is humidity a dimensionless quantity? {result}")  # True
 ```
 
 
@@ -102,23 +120,19 @@ from jsonsubschema.semantic_type import SemanticTypeResolver
 import jsonsubschema.config as config
 import rdflib
 
-# Disable debug output for cleaner results
+# Configure
 config.set_debug(False)
-
-# Enable semantic reasoning
 config.set_semantic_reasoning(True)
 
-# Set up semantic graph with test relationships
+# Reset resolver
+SemanticTypeResolver.reset_instance()
+
+# Load real QUDT ontology
 graph = rdflib.Graph()
-test_data = """
-@prefix quantitykind: <http://qudt.org/vocab/quantitykind/> .
-@prefix skos: <http://www.w3.org/2004/02/skos/core#> .
+print("Loading ...")
+graph.parse("http://qudt.org/vocab/quantitykind", format="turtle")
 
-quantitykind:ThermodynamicTemperature skos:broader quantitykind:Temperature .
-"""
-graph.parse(data=test_data, format="turtle")
-
-# Initialize resolver with the graph (suppress internal prints)
+# Initialize resolver
 resolver = SemanticTypeResolver.get_instance(graph=graph)
 
 # Schemas with semantic annotations
@@ -141,30 +155,26 @@ print(f"Is thermodynamic temperature a subtype of temperature? {is_subtype}")
 
 #### Nested Schemas
 ```python
-# IoT sensor data schema
 from jsonsubschema import isSubschema
 from jsonsubschema.semantic_type import SemanticTypeResolver
 import jsonsubschema.config as config
 import rdflib
 
-# Disable debug output for cleaner results
+# Configure
 config.set_debug(False)
-
-# Enable semantic reasoning
 config.set_semantic_reasoning(True)
 
-# Set up semantic graph with test relationships
+# Reset resolver
+SemanticTypeResolver.reset_instance()
+
+# Load real QUDT ontology
 graph = rdflib.Graph()
-test_data = """
-@prefix quantitykind: <http://qudt.org/vocab/quantitykind/> .
-@prefix skos: <http://www.w3.org/2004/02/skos/core#> .
+print("Loading ...")
+graph.parse("http://qudt.org/vocab/quantitykind", format="turtle")
 
-quantitykind:ThermodynamicTemperature skos:broader quantitykind:Temperature .
-"""
-graph.parse(data=test_data, format="turtle")
-
-# Initialize resolver with the graph (suppress internal prints)
+# Initialize resolver
 resolver = SemanticTypeResolver.get_instance(graph=graph)
+
 
 
 # IoT sensor data schema
@@ -224,7 +234,7 @@ echo '{
 ```
 ```bash
 # Check semantic relationship
-python -m jsonsubschema.cli --ontology qudt  .\humidity_schema.json .\pressure_ratio_schema.json
+python -m jsonsubschema.cli --ontology qudt RelativeHumidity.json PressureRatio.json
 ```
 
 ## Testing
