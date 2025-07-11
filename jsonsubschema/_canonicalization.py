@@ -41,19 +41,11 @@ def canonicalize_schema(obj):
 
 
 def canonicalize_dict(d, outer_key=None):
+    
     # not actually needed, but for testing
     # canonicalization to work properly;
     if d == {} or d == {"not": {}}:
         return d
-
-    # Ignore (drop) any other validatoin keyword when there is a $ref
-    # Currently, jsonref handles this case properly,
-    # We might need to handle it again on out own when
-    # we handle recursive $ref independently from jsonref.
-    # if d.get("$ref"):
-    #     for k in list(d.keys()):
-    #         if k != "$ref" and k not in definitions.JNonValidation:
-    #             del d[k]
 
     # Skip normal dict canonicalization
     # for object.properties;
@@ -95,9 +87,45 @@ def canonicalize_dict(d, outer_key=None):
         return canonicalize_list_of_types(d)
 
 
+# Replace your canonicalize_list_of_types function with this:
+def canonicalize_list_of_types(d):
+    
+    t = set(d.get("type"))
+    if t == definitions.JallTypes and \
+        not set(d.keys()).intersection(definitions.JtypesRestrictionKeywords):
+        return JSONtop()
+    
+    # PRESERVE ORIGINAL STYPE
+    original_stype = d.get("stype")
+    
+    anyofs = []
+    for t_i in t:
+        if t_i in definitions.Jtypes:
+            s_i = copy.deepcopy(d)
+            s_i["type"] = t_i
+            s_i = canonicalize_single_type(s_i)
+            
+            # ENSURE STYPE IS IN EACH BRANCH
+            if original_stype and "stype" not in s_i:
+                s_i["stype"] = original_stype
+            
+            anyofs.append(s_i)
+
+    result = {"anyOf": anyofs}
+    # ALSO ADD STYPE TO RESULT LEVEL
+    if original_stype:
+        result["stype"] = original_stype
+    return result
+
+
+# Update canonicalize_single_type to preserve stype:
 def canonicalize_single_type(d):
+    
     t = d.get("type")
     if t in definitions.Jtypes:
+        # PRESERVE STYPE BEFORE PROCESSING
+        original_stype = d.get("stype")
+        
         # Remove irrelevant keywords
         for k, v in list(d.items()):
             if k not in definitions.Jcommonkw and k not in definitions.JtypesToKeywords.get(t) and k not in definitions.JNonValidation:
@@ -107,55 +135,22 @@ def canonicalize_single_type(d):
             elif utils.is_list(v):
                 if k == "enum":
                     v = utils.get_typed_enum_vals(v, t)
-                    # if not v:
-                    #     return BOT
-                    # else:
                     d[k] = v
                 elif k == "required":
                     d[k] = sorted(set(v))
                 else:
-                    # "list" must be operand of boolean connectors
                     d[k] = [canonicalize_dict(i) for i in v]
+        
+        # RESTORE STYPE IF IT WAS REMOVED
+        if original_stype and "stype" not in d:
+            d["stype"] = original_stype
+        
         if "enum" in d:
-            return rewrite_enum(d)
+            result = rewrite_enum(d)
         else:
-            return d
+            result = d
+        return result
 
-    # jsonschema validation in the begining prevents
-    # reaching this case. So we don't need this.
-    # else:
-    #     print("Unknown schema type {} at:".format(t))
-    #     print(d)
-    #     print("Exiting...")
-    #     sys.exit(1)
-
-
-def canonicalize_list_of_types(d):
-    t = set(d.get("type"))
-    if t == definitions.JallTypes and \
-        not set(d.keys()).intersection(definitions.JtypesRestrictionKeywords):
-        return JSONtop()
-    
-    anyofs = []
-    for t_i in t:
-        if t_i in definitions.Jtypes:
-            s_i = copy.deepcopy(d)
-            s_i["type"] = t_i
-            s_i = canonicalize_single_type(s_i)
-            anyofs.append(s_i)
-
-        # jsonschema validation in the begining prevents
-        # reaching this case. So we don't need this.
-        # else:
-            # print("Unknown schema type {} at: {}".format(t_i, t))
-            # print(d)
-            # print("Exiting...")
-            # sys.exit(1)
-
-    # if len(anyofs) == 1:
-    #     return anyofs[0]
-    # elif len(anyofs) > 1:
-    return {"anyOf": anyofs}
 
 
 def canonicalize_enum(d):
@@ -179,9 +174,11 @@ def canonicalize_const(d):
     return canonicalize_enum(d)
 
 def canonicalize_connectors(d):
+    
     connectors = definitions.Jconnectors.intersection(d.keys())
     lhs_kw = definitions.Jkeywords.intersection(d.keys())
     lhs_kw_without_connectors = lhs_kw.difference(connectors)
+
 
     # Single connector.
     if len(connectors) == 1 and not lhs_kw_without_connectors:
@@ -203,7 +200,7 @@ def canonicalize_connectors(d):
                 anyofs.append({"allOf": allofs})
             return canonicalize_connectors({"anyOf": anyofs})
 
-        # Here, the connector is either allOf or oneOf
+        # Here, the connector is either allOf or anyOf
         # So we better simplify them before proceeding more.
         else:
             d[c] = [canonicalize_dict(i) for i in d[c]]
@@ -218,10 +215,11 @@ def canonicalize_connectors(d):
             allofs.append(canonicalize_dict({c: d[c]}))
             del d[c]
         if lhs_kw_without_connectors:
-            allofs.append(canonicalize_dict(
-                {k: d[k] for k in lhs_kw_without_connectors}))
-        return {"allOf": allofs}
-        # return simplify_schema_and_embed_checkers({"allOf": allofs})
+            other_dict = {k: d[k] for k in lhs_kw_without_connectors}
+            allofs.append(canonicalize_dict(other_dict))
+        
+        result = {"allOf": allofs}
+        return result
 
 
 def canonicalize_not(d):
@@ -363,8 +361,57 @@ def simplify_schema_and_embed_checkers(s):
 
     if "anyOf" in s:
         anyofs = [simplify_schema_and_embed_checkers(i) for i in s["anyOf"]]
-        return boolToConstructor.get("anyOf")({"anyOf": anyofs})
+        result = boolToConstructor.get("anyOf")({"anyOf": anyofs})
+        
+        # PRESERVE SEMANTIC TYPE
+        if "stype" in s:
+            result["stype"] = s["stype"]
+            result.stype = s["stype"]
+            
+        return result
 
     if "allOf" in s:
         allofs = [simplify_schema_and_embed_checkers(i) for i in s["allOf"]]
-        return boolToConstructor.get("allOf")({"allOf": allofs})
+        result = boolToConstructor.get("allOf")({"allOf": allofs})
+        
+        # PRESERVE SEMANTIC TYPE
+        if "stype" in s:
+            result["stype"] = s["stype"]
+            result.stype = s["stype"]
+            
+        return result
+
+
+def canonicalize_single_type(d):
+    t = d.get("type")
+    if t in definitions.Jtypes:
+        # Remove irrelevant keywords
+        for k, v in list(d.items()):
+            if k not in definitions.Jcommonkw and k not in definitions.JtypesToKeywords.get(t) and k not in definitions.JNonValidation:
+                d.pop(k)
+            elif utils.is_dict(v):
+                d[k] = canonicalize_dict(v, k)
+            elif utils.is_list(v):
+                if k == "enum":
+                    v = utils.get_typed_enum_vals(v, t)
+                    # if not v:
+                    #     return BOT
+                    # else:
+                    d[k] = v
+                elif k == "required":
+                    d[k] = sorted(set(v))
+                else:
+                    # "list" must be operand of boolean connectors
+                    d[k] = [canonicalize_dict(i) for i in v]
+        if "enum" in d:
+            return rewrite_enum(d)
+        else:
+            return d
+
+    # jsonschema validation in the begining prevents
+    # reaching this case. So we don't need this.
+    # else:
+    #     print("Unknown schema type {} at:".format(t))
+    #     print(d)
+    #     print("Exiting...")
+    #     sys.exit(1)

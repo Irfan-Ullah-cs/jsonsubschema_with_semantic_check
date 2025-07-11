@@ -1,7 +1,8 @@
 """
 Created on May 13, 2025
 Comprehensive test cases for FOAF (Friend of a Friend) integration with jsonsubschema.
-Run the test file with pytest .\test_foaf_integration_original.py -v
+Uses actual FOAF ontology from http://xmlns.com/foaf/spec/index.rdf 
+Run the test file with pytest test_foaf_integration.py -v
 """
 
 import pytest
@@ -10,6 +11,51 @@ import os
 from jsonsubschema.api import isSubschema, meet, join, isEquivalent
 from jsonsubschema.semantic_type import SemanticTypeResolver, is_semantically_compatible, normalize_iri
 import jsonsubschema.config as config
+import rdflib
+
+# ===== Utility Function for Loading Official FOAF =====
+
+def load_official_foaf_ontology():
+    """Load the official FOAF ontology from the standard URL"""
+    graph = rdflib.Graph()
+    try:
+        print("Loading FOAF ontology from http://xmlns.com/foaf/spec/index.rdf...")
+        graph.parse("http://xmlns.com/foaf/spec/index.rdf")
+        print(f"Successfully loaded {len(graph)} triples from FOAF ontology")
+        return graph
+    except Exception as e:
+        print(f"Failed to load FOAF ontology: {e}")
+        # Fallback: create minimal FOAF hierarchy based on official spec
+        fallback_foaf = """
+        @prefix foaf: <http://xmlns.com/foaf/0.1/> .
+        @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+        @prefix owl: <http://www.w3.org/2002/07/owl#> .
+        
+        # Core FOAF classes from official specification
+        foaf:Person a rdfs:Class, owl:Class ;
+            rdfs:subClassOf foaf:Agent .
+            
+        foaf:Organization a rdfs:Class, owl:Class ;
+            rdfs:subClassOf foaf:Agent .
+            
+        foaf:Group a rdfs:Class, owl:Class ;
+            rdfs:subClassOf foaf:Agent .
+            
+        foaf:Project a rdfs:Class, owl:Class .
+        
+        foaf:Agent a rdfs:Class, owl:Class .
+        
+        foaf:Document a rdfs:Class, owl:Class .
+        
+        foaf:Image a rdfs:Class, owl:Class ;
+            rdfs:subClassOf foaf:Document .
+            
+        foaf:PersonalProfileDocument a rdfs:Class, owl:Class ;
+            rdfs:subClassOf foaf:Document .
+        """
+        graph.parse(data=fallback_foaf, format="turtle")
+        print(f"Using fallback FOAF data with {len(graph)} triples")
+        return graph
 
 # ===== FOAF Loading and Setup Tests =====
 
@@ -36,30 +82,13 @@ def test_foaf_graph_loading():
     assert isinstance(triple_count, int), "Graph should have countable triples"
 
 def test_foaf_original_relationships_loading():
-    """Test loading original FOAF relationships via Turtle format"""
+    """Test loading original FOAF relationships via official ontology"""
     SemanticTypeResolver.reset_instance()
     config.set_semantic_reasoning(True)
     
-    resolver = SemanticTypeResolver.get_instance()
-    
-    # Add original FOAF relationships using rdfs:subClassOf (proper FOAF pattern)
-    original_foaf_data = """
-    @prefix foaf: <http://xmlns.com/foaf/0.1/> .
-    @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
-    
-    # Standard FOAF class hierarchy
-    foaf:Person rdfs:subClassOf foaf:Agent .
-    foaf:Organization rdfs:subClassOf foaf:Agent .
-    foaf:Group rdfs:subClassOf foaf:Agent .
-    foaf:Project rdfs:subClassOf foaf:Agent .
-    
-    # FOAF document hierarchy
-    foaf:Image rdfs:subClassOf foaf:Document .
-    foaf:PersonalProfileDocument rdfs:subClassOf foaf:Document .
-    """
-    
-    # Parse FOAF data into graph
-    resolver.graph.parse(data=original_foaf_data, format="turtle")
+    # Load official FOAF ontology
+    foaf_graph = load_official_foaf_ontology()
+    resolver = SemanticTypeResolver.get_instance(graph=foaf_graph)
     
     # Test that FOAF relationships are loaded
     person_to_agent = resolver.is_subtype_of("foaf:Person", "foaf:Agent")
@@ -86,23 +115,13 @@ def test_foaf_loading_failure_handling():
 # ===== FOAF Relationship Testing =====
 
 def test_foaf_basic_relationships():
-    """Test basic FOAF concept relationships """
+    """Test basic FOAF concept relationships using official ontology"""
     SemanticTypeResolver.reset_instance()
     config.set_semantic_reasoning(True)
     
-    resolver = SemanticTypeResolver.get_instance()
-    
-    # Add standard FOAF relationships
-    foaf_relationships = """
-    @prefix foaf: <http://xmlns.com/foaf/0.1/> .
-    @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
-    
-    foaf:Person rdfs:subClassOf foaf:Agent .
-    foaf:Organization rdfs:subClassOf foaf:Agent .
-    foaf:Group rdfs:subClassOf foaf:Agent .
-    """
-    
-    resolver.graph.parse(data=foaf_relationships, format="turtle")
+    # Load official FOAF ontology
+    foaf_graph = load_official_foaf_ontology()
+    resolver = SemanticTypeResolver.get_instance(graph=foaf_graph)
     
     # Test core FOAF relationships
     person_agent = resolver.is_subtype_of("foaf:Person", "foaf:Agent")
@@ -117,22 +136,13 @@ def test_foaf_basic_relationships():
     print(f"FOAF relationships - Person->Agent: {person_agent}, Organization->Agent: {organization_agent}, Group->Agent: {group_agent}")
 
 def test_foaf_document_hierarchy():
-    """Test FOAF document class hierarchy"""
+    """Test FOAF document class hierarchy using official ontology"""
     SemanticTypeResolver.reset_instance()
     config.set_semantic_reasoning(True)
     
-    resolver = SemanticTypeResolver.get_instance()
-    
-    # Add FOAF document hierarchy
-    document_hierarchy = """
-    @prefix foaf: <http://xmlns.com/foaf/0.1/> .
-    @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
-    
-    foaf:Image rdfs:subClassOf foaf:Document .
-    foaf:PersonalProfileDocument rdfs:subClassOf foaf:Document .
-    """
-    
-    resolver.graph.parse(data=document_hierarchy, format="turtle")
+    # Load official FOAF ontology
+    foaf_graph = load_official_foaf_ontology()
+    resolver = SemanticTypeResolver.get_instance(graph=foaf_graph)
     
     # Test document relationships
     image_document = resolver.is_subtype_of("foaf:Image", "foaf:Document")
@@ -153,7 +163,9 @@ def test_foaf_self_relationships():
     SemanticTypeResolver.reset_instance()
     config.set_semantic_reasoning(True)
     
-    resolver = SemanticTypeResolver.get_instance()
+    # Load official FOAF ontology
+    foaf_graph = load_official_foaf_ontology()
+    resolver = SemanticTypeResolver.get_instance(graph=foaf_graph)
     
     foaf_concepts = [
         "foaf:Person",
@@ -296,17 +308,9 @@ def test_foaf_schema_semantic_compatibility():
     SemanticTypeResolver.reset_instance()
     config.set_semantic_reasoning(True)
     
-    resolver = SemanticTypeResolver.get_instance()
-    
-    # Add FOAF hierarchy
-    foaf_hierarchy = """
-    @prefix foaf: <http://xmlns.com/foaf/0.1/> .
-    @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
-    
-    foaf:Person rdfs:subClassOf foaf:Agent .
-    """
-    
-    resolver.graph.parse(data=foaf_hierarchy, format="turtle")
+    # Load official FOAF ontology
+    foaf_graph = load_official_foaf_ontology()
+    resolver = SemanticTypeResolver.get_instance(graph=foaf_graph)
     
     # Person schema (more specific)
     person_schema = {
@@ -350,18 +354,9 @@ def test_foaf_nested_schema_compatibility():
     SemanticTypeResolver.reset_instance()
     config.set_semantic_reasoning(True)
     
-    resolver = SemanticTypeResolver.get_instance()
-    
-    # Add organization hierarchy
-    foaf_hierarchy = """
-    @prefix foaf: <http://xmlns.com/foaf/0.1/> .
-    @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
-    
-    foaf:Organization rdfs:subClassOf foaf:Agent .
-    foaf:Person rdfs:subClassOf foaf:Agent .
-    """
-    
-    resolver.graph.parse(data=foaf_hierarchy, format="turtle")
+    # Load official FOAF ontology
+    foaf_graph = load_official_foaf_ontology()
+    resolver = SemanticTypeResolver.get_instance(graph=foaf_graph)
     
     # Organization with people (specific)
     org_with_people_schema = {
@@ -428,17 +423,9 @@ def test_foaf_mixed_iri_formats():
     SemanticTypeResolver.reset_instance()
     config.set_semantic_reasoning(True)
     
-    resolver = SemanticTypeResolver.get_instance()
-    
-    # Add test relationship
-    test_data = """
-    @prefix foaf: <http://xmlns.com/foaf/0.1/> .
-    @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
-    
-    foaf:Person rdfs:subClassOf foaf:Agent .
-    """
-    
-    resolver.graph.parse(data=test_data, format="turtle")
+    # Load official FOAF ontology
+    foaf_graph = load_official_foaf_ontology()
+    resolver = SemanticTypeResolver.get_instance(graph=foaf_graph)
     
     # Test relationships using both compact and full IRIs
     compact_to_full = resolver.is_subtype_of(
@@ -465,7 +452,9 @@ def test_foaf_unknown_concepts():
     SemanticTypeResolver.reset_instance()
     config.set_semantic_reasoning(True)
     
-    resolver = SemanticTypeResolver.get_instance()
+    # Load official FOAF ontology
+    foaf_graph = load_official_foaf_ontology()
+    resolver = SemanticTypeResolver.get_instance(graph=foaf_graph)
     
     # Test with unknown FOAF concepts
     unknown_to_known = resolver.is_subtype_of("foaf:UnknownConcept", "foaf:Person")
@@ -584,6 +573,10 @@ def test_foaf_properties_in_schemas():
     """Test using original FOAF properties in schemas"""
     SemanticTypeResolver.reset_instance()
     config.set_semantic_reasoning(True)
+    
+    # Load official FOAF ontology  
+    foaf_graph = load_official_foaf_ontology()
+    resolver = SemanticTypeResolver.get_instance(graph=foaf_graph)
     
     # Schema using standard FOAF properties
     person_with_foaf_props = {

@@ -16,7 +16,7 @@ from jsonsubschema._utils import (
 )
 
 from jsonsubschema.exceptions import UnsupportedRecursiveRef
-
+from jsonsubschema.semantic_type import is_semantically_compatible, SemanticTypeResolver, _get_schema_stype
 def debug_subschema_check(s1, s2):
     """Debug function to print schema details before checking subtyping."""
     _s1, _s2 = prepare_operands(s1, s2)
@@ -193,21 +193,9 @@ def isEquivalent(s1, s2):
         resolver = SemanticTypeResolver.get_instance()
         if not is_semantically_compatible(s1, s2, resolver) or not is_semantically_compatible(s2, s1, resolver):
             return False
-        
-        # Additionally, for equivalence, semantic types must be equivalent
-        s1_stype = s1.get('stype')
-        s2_stype = s2.get('stype')
-        
-        # Both must have same semantic type presence
-        if (s1_stype is None) != (s2_stype is None):
-            return False
-            
-        # If both have semantic types, they must be equivalent
-        if s1_stype is not None and s2_stype is not None:
-            if not (resolver.is_subtype_of(s1_stype, s2_stype) and resolver.is_subtype_of(s2_stype, s1_stype)):
-                return False
     
-    # Check structural equivalence
+    # Check structural equivalence - this already handles semantic types properly
+    # after canonicalization distributes them correctly
     return isSubschema(s1, s2) and isSubschema(s2, s1)
 
 

@@ -9,7 +9,7 @@ from jsonsubschema.api import isSubschema, meet, join, isEquivalent
 
 # ===== Core Logic: Permissive Semantic Compatibility =====
 
-def test_stype_at_root():
+def test_stype_permissive_compatibility():
     """Test permissive semantic compatibility: different stype presence"""
     
     # Schema WITH stype

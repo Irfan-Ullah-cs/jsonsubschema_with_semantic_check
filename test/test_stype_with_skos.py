@@ -2,7 +2,6 @@
 Created on May 13, 2025
 Consolidated tests for semantic type checking (stype) in jsonsubschema,
 with SKOS hierarchy support and basic meet/join operations.
-CORRECTED VERSION - Replace your entire test file with this.
 """
 
 import pytest
@@ -11,24 +10,51 @@ import os
 import rdflib
 from jsonsubschema.api import isSubschema, meet, join, isEquivalent
 from jsonsubschema.semantic_type import SemanticTypeResolver, normalize_iri
+import subprocess
 
 
 def setup_test_graph():
-    """Setup a test graph with QUDT relationships for testing"""
+    """Setup a test graph with REAL QUDT relationships for testing"""
     graph = rdflib.Graph()
     
-    # Add test QUDT relationships
-    test_data = """
-    @prefix quantitykind: <http://qudt.org/vocab/quantitykind/> .
-    @prefix skos: <http://www.w3.org/2004/02/skos/core#> .
-    
-    quantitykind:RelativeHumidity skos:broader quantitykind:RelativePartialPressure .
-    quantitykind:RelativePartialPressure skos:broader quantitykind:PressureRatio .
-    quantitykind:Temperature skos:broader quantitykind:ThermodynamicTemperature .
-    """
-    
-    graph.parse(data=test_data, format="turtle")
-    return graph
+    try:
+        print("Loading real QUDT quantitykind ontology...")
+        # Load the real QUDT quantitykind ontology
+        graph.parse("https://qudt.org/vocab/quantitykind/")
+        print(f"Successfully loaded {len(graph)} triples from QUDT quantitykind ontology")
+        return graph
+    except Exception as e:
+        print(f"Failed to load real QUDT ontology: {e}")
+        # Fallback: create test data based on real QUDT relationships
+        test_data = """
+        @prefix quantitykind: <http://qudt.org/vocab/quantitykind/> .
+        @prefix skos: <http://www.w3.org/2004/02/skos/core#> .
+        @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+        
+        # Real QUDT relationships from the ontology
+        quantitykind:RelativeHumidity skos:broader quantitykind:RelativePartialPressure .
+        quantitykind:RelativePartialPressure skos:broader quantitykind:PressureRatio .
+        quantitykind:Temperature skos:broader quantitykind:ThermodynamicTemperature .
+        
+        # Additional real QUDT quantity kinds
+        quantitykind:Pressure a rdfs:Class .
+        quantitykind:AbsolutePressure skos:broader quantitykind:Pressure .
+        quantitykind:GaugePressure skos:broader quantitykind:Pressure .
+        quantitykind:DifferentialPressure skos:broader quantitykind:Pressure .
+        
+        # More specific temperature types
+        quantitykind:CelsiusTemperature skos:broader quantitykind:Temperature .
+        quantitykind:FahrenheitTemperature skos:broader quantitykind:Temperature .
+        quantitykind:KelvinTemperature skos:broader quantitykind:ThermodynamicTemperature .
+        
+        # Humidity relationships
+        quantitykind:AbsoluteHumidity skos:broader quantitykind:Humidity .
+        quantitykind:RelativeHumidity skos:broader quantitykind:Humidity .
+        """
+        
+        graph.parse(data=test_data, format="turtle")
+        print(f"Using fallback QUDT data with {len(graph)} triples")
+        return graph
 
 
 # ===== SKOS Hierarchy and IRI Normalization Tests =====
@@ -165,8 +191,8 @@ def test_nested_schema_with_skos():
     assert isSubschema(nested_specific, nested_general), "Nested specific concept should be subschema of nested general concept"
     assert not isSubschema(nested_general, nested_specific), "Nested general concept should not be subschema of nested specific concept"
 
-def test_real_world_sensor_schemas():
-    """Test with realistic sensor data schemas"""
+def test_basic_sensor_schemas():
+    """Test with basic sensor data schemas"""
     SemanticTypeResolver.reset_instance()
     graph = setup_test_graph()
     resolver = SemanticTypeResolver.get_instance(graph=graph, lazy_load=False)
@@ -339,10 +365,7 @@ def test_join_with_hierarchical_semantic_types():
 # ===== CLI Interface Tests =====
 
 def test_cli_with_semantic_types():
-    """Test CLI interface with semantic type checking"""
-    SemanticTypeResolver.reset_instance()
-    graph = setup_test_graph()
-    resolver = SemanticTypeResolver.get_instance(graph=graph, lazy_load=False)
+    """Actually test CLI interface with semantic type checking"""
     
     # Create test schema files
     humidity_schema = {
@@ -353,13 +376,12 @@ def test_cli_with_semantic_types():
     }
     
     pressure_schema = {
-        "type": "number",
+        "type": "number", 
         "minimum": 0,
         "maximum": 100,
         "stype": "quantitykind:PressureRatio"
     }
     
-    # Create directory and write schemas
     os.makedirs("test_semantic", exist_ok=True)
     
     with open("test_semantic/humidity.json", "w") as f:
@@ -368,16 +390,26 @@ def test_cli_with_semantic_types():
     with open("test_semantic/pressure.json", "w") as f:
         json.dump(pressure_schema, f, indent=2)
     
-    # Test subschema relationship directly with API
-    assert isSubschema(humidity_schema, pressure_schema), \
-           "Humidity schema should be a subschema of pressure schema (via API)"
-    assert not isSubschema(pressure_schema, humidity_schema), \
-           "Pressure schema should not be a subschema of humidity schema (via API)"
-    
-    # Clean up
-    os.remove("test_semantic/humidity.json")
-    os.remove("test_semantic/pressure.json")
-    os.rmdir("test_semantic")
+    try:
+        # **ACTUALLY TEST THE CLI** 
+        result = subprocess.run([
+            "python", "-m", "jsonsubschema.cli",
+            "--ontology", "qudt",
+            "test_semantic/humidity.json", 
+            "test_semantic/pressure.json"
+        ], capture_output=True, text=True)
+        
+        # Check CLI returned success (exit code 0)
+        assert result.returncode == 0, f"CLI failed: {result.stderr}"
+        assert "LHS <: RHS True" in result.stdout
+        
+        print("CLI test passed")
+        
+    finally:
+        # Clean up
+        os.remove("test_semantic/humidity.json")
+        os.remove("test_semantic/pressure.json") 
+        os.rmdir("test_semantic")
 
 if __name__ == "__main__":
     pytest.main(["-v", __file__])

@@ -69,6 +69,7 @@ class JSONschema(dict, metaclass=UninhabitedMeta):
             print("Found an uninhabited type at: ", type(self), self)
         return uninhabited
 
+
     def meet(self, s):
         #
         # if self == s or is_top(s):
@@ -82,17 +83,47 @@ class JSONschema(dict, metaclass=UninhabitedMeta):
             return JSONbot()
         #
         ret = self._meet(s)
-        #
-        # if self.hasEnum() or s.hasEnum():
-        #     enum = JSONschema.meet_enum(self, s)
-        #     if enum:
-        #         ret.enum = ret["enum"] = enum
-        #         # ret["enum"] = list(enum)
-        #         # ret.enum = ret["enum"]
-        #     # instead of returning uninhabited type, return bot
-        #     else:
-        #         return JSONbot()
-        #
+        
+        # PRESERVE SEMANTIC TYPE: Collect stype from both operands
+        self_stype = None
+        s_stype = None
+        
+        # Get stype from self
+        if hasattr(self, 'stype'):
+            self_stype = self.stype
+        elif hasattr(self, '__getitem__') and 'stype' in self:
+            self_stype = self['stype']
+        elif hasattr(self, 'get'):
+            self_stype = self.get('stype')
+        
+        # Get stype from s
+        if hasattr(s, 'stype'):
+            s_stype = s.stype
+        elif hasattr(s, '__getitem__') and 'stype' in s:
+            s_stype = s['stype']
+        elif hasattr(s, 'get'):
+            s_stype = s.get('stype')
+        
+        # Preserve stype in result
+        result_stype = None
+        if self_stype and s_stype and self_stype == s_stype:
+            result_stype = self_stype  # Both have same stype
+        elif self_stype and not s_stype:
+            result_stype = self_stype  # Only self has stype
+        elif s_stype and not self_stype:
+            result_stype = s_stype     # Only s has stype
+        
+        # Apply stype to result if we have one
+        if result_stype and ret is not None:
+            try:
+                if hasattr(ret, '__setitem__'):
+                    ret['stype'] = result_stype
+                if hasattr(ret, '__setattr__'):
+                    ret.stype = result_stype
+            except:
+                # If setting stype fails, continue without it
+                pass
+        
         return ret
 
     # @staticmethod
@@ -118,6 +149,9 @@ class JSONschema(dict, metaclass=UninhabitedMeta):
         # print("Eww! Using abstract _join :: running into corner case!")
         return JSONanyOf(ret)
 
+    
+
+
     def join(self, s):
         #
         # if self == s or is_bot(s):
@@ -131,6 +165,47 @@ class JSONschema(dict, metaclass=UninhabitedMeta):
             return JSONtop()
         #
         ret = self._join(s)
+        
+        # PRESERVE SEMANTIC TYPE: Collect stype from both operands
+        self_stype = None
+        s_stype = None
+        
+        # Get stype from self
+        if hasattr(self, 'stype'):
+            self_stype = self.stype
+        elif hasattr(self, '__getitem__') and 'stype' in self:
+            self_stype = self['stype']
+        elif hasattr(self, 'get'):
+            self_stype = self.get('stype')
+        
+        # Get stype from s
+        if hasattr(s, 'stype'):
+            s_stype = s.stype
+        elif hasattr(s, '__getitem__') and 'stype' in s:
+            s_stype = s['stype']
+        elif hasattr(s, 'get'):
+            s_stype = s.get('stype')
+        
+        # Preserve stype in result (for join, use same stype if both match)
+        result_stype = None
+        if self_stype and s_stype and self_stype == s_stype:
+            result_stype = self_stype  # Both have same stype
+        elif self_stype and not s_stype:
+            result_stype = self_stype  # Only self has stype
+        elif s_stype and not self_stype:
+            result_stype = s_stype     # Only s has stype
+        
+        # Apply stype to result if we have one
+        if result_stype and ret is not None:
+            try:
+                if hasattr(ret, '__setitem__'):
+                    ret['stype'] = result_stype
+                if hasattr(ret, '__setattr__'):
+                    ret.stype = result_stype
+            except:
+                # If setting stype fails, continue without it
+                pass
+        
         #
         if self.hasEnum() and s.hasEnum():
             enum = JSONschema.join_enum(self, s)
@@ -1474,9 +1549,36 @@ class JSONTypeObject(JSONschema):
 
 
 def JSONanyOfFactory(s):
+    
+    # Collect stype from the original schema
+    original_stype = None
+    if 'stype' in s:
+        original_stype = s['stype']
+    
+    # Also check if any of the anyOf items have stype
+    for item in s.get("anyOf", []):
+        if isinstance(item, dict) and 'stype' in item:
+            original_stype = item['stype']
+            break
+        elif hasattr(item, 'stype'):
+            original_stype = item.stype
+            break
+    
+    
     ret = JSONbot()
     for i in s.get("anyOf"):
         ret = ret.join(i)
+
+    # PRESERVE SEMANTIC TYPE in final result
+    if original_stype and ret is not None:
+        try:
+            if hasattr(ret, '__setitem__'):
+                ret['stype'] = original_stype
+            if hasattr(ret, '__setattr__'):
+                ret.stype = original_stype
+        except:
+            print(f"DEBUG: JSONanyOfFactory failed to apply stype")
+    
 
     return ret
 
@@ -1488,6 +1590,20 @@ class JSONanyOf(JSONschema):
         self.type = "anyOf"
         self.anyOf = self.get("anyOf")
         self.nonTrivialJoin = False
+
+        if "stype" in s:
+            self.stype = s["stype"]
+        else:
+            # Check if any anyOf item has stype
+            for item in self.anyOf:
+                if isinstance(item, dict) and 'stype' in item:
+                    self.stype = item['stype']
+                    self['stype'] = item['stype']
+                    break
+                elif hasattr(item, 'stype'):
+                    self.stype = item.stype
+                    self['stype'] = item.stype
+                    break
 
     # def __eq__(self, other):
     #     ''' This is some sort of hack to compare two anyOf schemas for equality
@@ -1559,14 +1675,39 @@ class JSONanyOf(JSONschema):
         return _isAnyofSubtype(self, s)
 
 
+
 def JSONallOfFactory(s):
+    
+    # Collect stype from the original schema
+    original_stype = None
+    if 'stype' in s:
+        original_stype = s['stype']
+    
+    # Also check if any of the allOf items have stype
+    for item in s.get("allOf", []):
+        if isinstance(item, dict) and 'stype' in item:
+            original_stype = item['stype']
+            break
+        elif hasattr(item, 'stype'):
+            original_stype = item.stype
+            break
+    
+    
     ret = JSONtop()
     for i in s.get("allOf"):
         ret = ret.meet(i)
 
+    # PRESERVE SEMANTIC TYPE in final result
+    if original_stype and ret is not None:
+        try:
+            if hasattr(ret, '__setitem__'):
+                ret['stype'] = original_stype
+            if hasattr(ret, '__setattr__'):
+                ret.stype = original_stype
+        except:
+            print(f"DEBUG: JSONallOfFactory failed to apply stype")
+    
     return ret
-
-
 # def JSONnotFactory(s):
 #     t = s.type
 #     if t in definitions.Jtypes:
