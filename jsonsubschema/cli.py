@@ -165,7 +165,7 @@ Examples:
             print("       Use --ontology flag to specify an ontology:")
             print("       --ontology foaf    (for FOAF types like foaf:Person)")
             print("       --ontology qudt    (for QUDT types like quantitykind:Temperature)")
-            print("       --ontology skos    (for SKOS types)")
+            
             print("       OR use --graph to load custom RDF file")
             print("       OR remove stype fields for structural-only validation")
             return 1
